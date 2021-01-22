@@ -2,13 +2,8 @@
 # Author: SaySeven
 # Little hacks and compatibility improvments by Luiz Antonio Rangel (a.k.a luiztheblues)
 
-<<<<<<< HEAD
 alias install_sqlmap='apt-get install sqlmap -y'
 alias install_tor='apt-get install tor -y'
-=======
-alias install_sqlmap='apt-get install -yv sqlmap'
-alias install_tor='apt-get install -yv tor'
->>>>>>> e7c8c8af12040c3b88919924bb3dedb18151b115
 check_sqlmap="`dpkg --get-selections | grep -c sqlmap`"
 check_tor="`dpkg --get-selections | grep -c tor`"
 
