@@ -36,3 +36,4 @@ Ex: python FrameSeven.py --sqls www.site.com  --> O programa irar pedir a url vu
 OBS: Cheque se sua variavel de ambiente está como root, echo $USER
 
 OBS IMPORTANTE: Instale as dependencias --> pip install -r dependencias.txt
+OBS IMPORTANTE: Instale o Git-Lfs --> apt install git-lfs
