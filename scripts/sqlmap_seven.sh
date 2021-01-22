@@ -50,11 +50,7 @@ cat <<!
 !
 printf '%s' 'Digite a URL ou o IP do alvo: '
 read alvo
-<<<<<<< HEAD
 printf "\
-=======
-printf '%s' "\
->>>>>>> e7c8c8af12040c3b88919924bb3dedb18151b115
 1) SQLmap padrão
 2) SQLmap furtivo
 3) SQLmap com Tor
@@ -77,11 +73,7 @@ unset op
 printf '%s' 'Digite o banco de dados que você deseja proseguir com o ataque: ' 
 read db
 
-<<<<<<< HEAD
 printf "\
-=======
-printf '%s' "\
->>>>>>> e7c8c8af12040c3b88919924bb3dedb18151b115
 1) SQLmap padrão
 2) SQLmap furtivo
 3) SQLmap com Tor
@@ -103,11 +95,7 @@ unset op
 printf '%s' 'Digite a tabela que você deseja proseguir com o ataque: '
 read tb
 
-<<<<<<< HEAD
 printf "\
-=======
-printf '%s' "\
->>>>>>> e7c8c8af12040c3b88919924bb3dedb18151b115
 1) SQLmap padrão
 2) SQLmap furtivo
 3) SQLmap com Tor
@@ -126,17 +114,10 @@ case "${op}" in
 esac
 unset op
 
-<<<<<<< HEAD
 printf '%s' 'Digite as colunas que você deseja dumpar: '
 read cl
 
 printf "\
-=======
-printf '%s\n' 'Digite as colunas que você deseja dumpar: '
-read cl
-
-printf '%s' "\
->>>>>>> e7c8c8af12040c3b88919924bb3dedb18151b115
 1) SQLmap padrão
 2) SQLmap furtivo
 3) SQLmap com Tor
@@ -156,8 +137,4 @@ esac
 
 unset op alvo db tb cl # Clean up memory
 service tor stop # Stop Tor service if it stills running
-<<<<<<< HEAD
 exit
-=======
-exit
->>>>>>> e7c8c8af12040c3b88919924bb3dedb18151b115
