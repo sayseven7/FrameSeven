@@ -22,7 +22,7 @@
 			--ssmpt			Enumerar smtp
 			--bftp			Brutar ftp
 			--bssh			Brutar ssh	
-      			--csqli			Checar SQLI
+      		--csqli			Checar SQLI
 			--sqls          	Sqlmap_Seven, explorar sqli
  
 Ex: python FrameSeven.py -u -d -l --bssh admin www.site.com
@@ -34,3 +34,7 @@ Ex: python FrameSeven.py --csqli http://www.site.com/parametro.php?artist=1 www.
 Ex: python FrameSeven.py --sqls www.site.com  --> O programa irar pedir a url vulneravel, você especificar por exempo: http://www.site.com/parametro.php?artist=1
 
 OBS: Cheque se sua variavel de ambiente está como root, echo $USER
+
+OBS IMPORTANTE: Instale as dependencias --> pip install -r dependencias.txt
+
+OBS IMPORTANTE: Instale o Git-Lfs --> apt install git-lfs
