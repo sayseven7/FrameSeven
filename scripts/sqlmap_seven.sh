@@ -4,16 +4,15 @@
 
 alias install_sqlmap='apt-get install sqlmap -y'
 alias install_tor='apt-get install tor -y'
-check_sqlmap="`dpkg --get-selections | grep -c sqlmap`"
-check_tor="`dpkg --get-selections | grep -c tor`"
 
 if [ `whoami` != 'root' ];then
     printf '%s\n' 'Para rodar esse script, é necessário ser root.'
     exit 1
 fi
 
-if [ "${check_sqlmap}" -eq '0' ]; then
-    printf '%s' 'SQLmap não está instalado; desaja instalar [y/n]? ' 
+check_sqlmap=$(which sqlmap)
+if [ $? != 0 ]; then
+    printf '%s' '[DEPENDENCIA] SQLmap não está instalado; desaja instalar [y/n]? ' 
     read yeah
     if printf '%s' "${yeah}" | grep -iq '^y'; then
       install_sqlmap
@@ -23,7 +22,9 @@ if [ "${check_sqlmap}" -eq '0' ]; then
 fi
 unset yeah # We don't need it in the memory anymore.
 
-if [ "${check_tor}" -eq '0' ]; then
+check_tor=$(which tor)
+
+if [ $? != 0 ]; then
     printf '%s' '[OPCIONAL] Tor não está instalado; deseja instalar [y/n]? '
     read yeah
     if printf '%s' "${yeah}" | grep -iq '^y'; then
