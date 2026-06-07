@@ -3,6 +3,7 @@ package mcp
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -30,6 +31,7 @@ func NewServer() *mcpsdk.Server {
 
 // Run starts the MCP server over stdin/stdout.
 func Run(ctx context.Context) error {
+	log.Printf("MCP server starting on stdio transport")
 	return NewServer().Run(ctx, &mcpsdk.StdioTransport{})
 }
 
@@ -61,6 +63,8 @@ func RunHTTP(ctx context.Context, addr string) error {
 		<-ctx.Done()
 		_ = server.Shutdown(ctx)
 	}()
+
+	log.Printf("MCP server listening on %s", addr)
 
 	err := server.ListenAndServe()
 	if err == http.ErrServerClosed {

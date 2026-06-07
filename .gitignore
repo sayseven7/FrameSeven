@@ -35,6 +35,9 @@ __pycache__
 .mypy_cache/
 .ruff_cache/
 
+# opencode
+opencode.json
+
 # Node
 node_modules/
 npm-debug.log*
