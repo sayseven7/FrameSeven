@@ -8,6 +8,12 @@ Run the installed command:
 frameseven [flags]
 ```
 
+Run without flags in a terminal to open the interactive scan setup:
+
+```bash
+frameseven
+```
+
 For a development build that has not been installed:
 
 ```bash
@@ -23,6 +29,11 @@ For a development build that has not been installed:
 | `-rate` | `50` | Requests sent by the rate-limit module |
 | `-ua` | `frameseven/v1` | User-Agent header sent by the scanner |
 | `-o` | none | Path for an optional JSON report |
+| `-interactive`, `-i` | disabled | Configure the scan with an interactive wizard |
+| `-yes`, `-y` | disabled | Skip the wizard's final confirmation |
+| `-quiet`, `-q` | disabled | Hide banner and progress messages |
+| `-version` | disabled | Print the installed build version |
+| `-list-modules` | disabled | List all Framework v1 scanner modules |
 
 The target must include the scheme and host:
 
@@ -32,6 +43,30 @@ frameseven -url https://target.example
 
 Values such as `target.example`, `ftp://target.example`, or an empty URL are
 rejected.
+
+## Interactive Mode
+
+When standard input is a terminal and `-url` is omitted, CLI v1 starts an
+interactive setup. It asks for:
+
+- Target URL
+- Per-request timeout
+- Rate-limit request count
+- User-Agent
+- Optional JSON report path
+
+The wizard displays the resulting configuration and requires confirmation
+before starting because Framework v1 sends active security probes.
+
+Start it explicitly:
+
+```bash
+frameseven --interactive
+```
+
+For authorized automated terminal sessions, `--yes` skips the final
+confirmation. Interactive mode is rejected when standard input is not a
+terminal.
 
 ## Environment Variables
 
@@ -64,6 +99,18 @@ frameseven \
   -url https://target.example \
   -ua "authorized-security-test/v1" \
   -o report.json
+```
+
+List the modules included in Framework v1:
+
+```bash
+frameseven --list-modules
+```
+
+Print the installed version:
+
+```bash
+frameseven --version
 ```
 
 ## Exit Codes

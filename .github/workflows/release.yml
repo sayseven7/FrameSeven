@@ -125,10 +125,11 @@ jobs:
           EXTENSION: ${{ matrix.extension }}
         run: |
           mkdir -p build
+          version="${RELEASE_TAG#v}"
 
           CGO_ENABLED=0 go build \
             -trimpath \
-            -ldflags="-s -w" \
+            -ldflags="-s -w -X main.buildVersion=$version" \
             -o "build/frameseven${EXTENSION}" \
             ./cmd/cli/v1
 

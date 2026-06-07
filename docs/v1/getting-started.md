@@ -6,7 +6,13 @@ Install frameseven before continuing:
 
 ## Run a Scan
 
-Use the installed command:
+Run the installed command without flags to configure the scan interactively:
+
+```bash
+frameseven
+```
+
+For scripts and repeatable commands, provide the target directly:
 
 ```bash
 frameseven -url https://target.example
