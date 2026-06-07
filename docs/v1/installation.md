@@ -2,7 +2,7 @@
 
 ## Distribution Status
 
-Versioned binaries and Debian packages are published through
+Versioned binaries and Linux packages are published through
 [GitHub Releases](https://github.com/sayseven7/frameseven/releases).
 
 GitHub Releases is the official distribution channel. Use a release artifact
@@ -14,10 +14,20 @@ Each release provides:
 - macOS binaries for `amd64` and `arm64`
 - A Windows binary for `amd64`
 - Debian packages for `amd64` and `arm64`
+- RPM packages for `amd64` and `arm64`
+- Arch Linux packages for `amd64` and `arm64`
 - A `SHA256SUMS` file for artifact verification
 
-Release tags use the `vX.Y.Z` format. Artifact and Debian package versions omit
-the leading `v`.
+Release tags use the `vX.Y.Z` format. Artifact and package versions omit the
+leading `v`.
+
+Release assets follow this naming convention:
+
+```text
+frameseven_<version>_<os>_<arch>.<format>
+```
+
+The public operating system names are `linux`, `macos`, and `windows`.
 
 ## Requirements
 
@@ -34,7 +44,7 @@ Download the `.deb` file for your architecture from the
 it:
 
 ```bash
-sudo apt install ./frameseven_<version>_amd64.deb
+sudo apt install ./frameseven_<version>_linux_amd64.deb
 ```
 
 Use the `arm64` package instead when running a 64-bit ARM system.
@@ -44,6 +54,28 @@ Verify the installation:
 ```bash
 frameseven -h
 ```
+
+## Red Hat, Fedora, and RPM-Based Distributions
+
+Download the `.rpm` file for your architecture from the release page, then
+install it:
+
+```bash
+sudo dnf install ./frameseven_<version>_linux_amd64.rpm
+```
+
+Use the `arm64` package instead when running a 64-bit ARM system.
+
+## Arch Linux
+
+Download the `.pkg.tar.zst` file for your architecture from the release page,
+then install it:
+
+```bash
+sudo pacman -U ./frameseven_<version>_linux_amd64.pkg.tar.zst
+```
+
+Use the `arm64` package instead when running a 64-bit ARM system.
 
 ## Linux and macOS Archive
 

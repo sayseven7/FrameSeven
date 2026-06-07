@@ -72,20 +72,29 @@ jobs:
       matrix:
         include:
           - goos: linux
+            artifact_os: linux
             goarch: amd64
             archive: tar.gz
             deb_arch: amd64
+            rpm_arch: x86_64
+            arch_arch: x86_64
           - goos: linux
+            artifact_os: linux
             goarch: arm64
             archive: tar.gz
             deb_arch: arm64
+            rpm_arch: aarch64
+            arch_arch: aarch64
           - goos: darwin
+            artifact_os: macos
             goarch: amd64
             archive: tar.gz
           - goos: darwin
+            artifact_os: macos
             goarch: arm64
             archive: tar.gz
           - goos: windows
+            artifact_os: windows
             goarch: amd64
             archive: zip
             extension: .exe
@@ -101,6 +110,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+
+      - name: Install Linux packaging tools
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm zstd
 
       - name: Build binary
         shell: bash
@@ -120,12 +135,12 @@ jobs:
       - name: Create release archive
         shell: bash
         env:
-          GOOS: ${{ matrix.goos }}
+          ARTIFACT_OS: ${{ matrix.artifact_os }}
           GOARCH: ${{ matrix.goarch }}
           ARCHIVE: ${{ matrix.archive }}
         run: |
           version="${RELEASE_TAG#v}"
-          package="frameseven_${version}_${GOOS}_${GOARCH}"
+          package="frameseven_${version}_${ARTIFACT_OS}_${GOARCH}"
 
           mkdir -p "dist/$package"
           cp build/frameseven* README.md LICENSE "dist/$package/"
@@ -149,7 +164,7 @@ jobs:
         run: |
           version="${RELEASE_TAG#v}"
           package_root="deb/frameseven"
-          package_file="frameseven_${version}_${DEB_ARCH}.deb"
+          package_file="frameseven_${version}_linux_${DEB_ARCH}.deb"
 
           mkdir -p \
             "$package_root/DEBIAN" \
@@ -176,6 +191,124 @@ jobs:
           EOF
 
           dpkg-deb --build --root-owner-group "$package_root" "dist/$package_file"
+          dpkg-deb --info "dist/$package_file"
+
+      - name: Create RPM package
+        if: matrix.goos == 'linux'
+        shell: bash
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          RPM_ARCH: ${{ matrix.rpm_arch }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          package_version="${version//-/_}"
+          package_file="frameseven_${version}_linux_${GOARCH}.rpm"
+          rpm_root="$PWD/rpm"
+
+          mkdir -p \
+            "$rpm_root/BUILD" \
+            "$rpm_root/BUILDROOT" \
+            "$rpm_root/RPMS" \
+            "$rpm_root/SOURCES" \
+            "$rpm_root/SPECS" \
+            "$rpm_root/SRPMS"
+
+          install -m 0755 build/frameseven "$rpm_root/SOURCES/frameseven"
+          install -m 0644 README.md "$rpm_root/SOURCES/README.md"
+          install -m 0644 LICENSE "$rpm_root/SOURCES/LICENSE"
+
+          cat > "$rpm_root/SPECS/frameseven.spec" <<EOF
+          Name: frameseven
+          Version: $package_version
+          Release: 1
+          Summary: Offensive web security scanner
+          License: MIT
+          URL: https://github.com/sayseven7/frameseven
+          Source0: frameseven
+          Source1: README.md
+          Source2: LICENSE
+
+          %description
+          CLI-first scanner for authorized web security testing.
+
+          %install
+          mkdir -p %{buildroot}/usr/bin
+          mkdir -p %{buildroot}/usr/share/doc/frameseven
+          install -m 0755 %{SOURCE0} %{buildroot}/usr/bin/frameseven
+          install -m 0644 %{SOURCE1} %{buildroot}/usr/share/doc/frameseven/README.md
+          install -m 0644 %{SOURCE2} %{buildroot}/usr/share/doc/frameseven/LICENSE
+
+          %files
+          /usr/bin/frameseven
+          /usr/share/doc/frameseven/README.md
+          /usr/share/doc/frameseven/LICENSE
+          EOF
+
+          rpmbuild \
+            -bb \
+            --target "$RPM_ARCH" \
+            --define "_topdir $rpm_root" \
+            --define "debug_package %{nil}" \
+            "$rpm_root/SPECS/frameseven.spec"
+
+          rpm_file="$(find "$rpm_root/RPMS" -type f -name '*.rpm' -print -quit)"
+
+          if [ -z "$rpm_file" ]; then
+            echo "RPM package was not created."
+            exit 1
+          fi
+
+          rpm -qip "$rpm_file"
+          cp "$rpm_file" "dist/$package_file"
+
+      - name: Create Arch Linux package
+        if: matrix.goos == 'linux'
+        shell: bash
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          ARCH_ARCH: ${{ matrix.arch_arch }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          package_version="${version//-/_}"
+          package_root="$PWD/arch/frameseven"
+          package_file="frameseven_${version}_linux_${GOARCH}.pkg.tar.zst"
+
+          mkdir -p \
+            "$package_root/usr/bin" \
+            "$package_root/usr/share/doc/frameseven"
+
+          install -m 0755 build/frameseven "$package_root/usr/bin/frameseven"
+          install -m 0644 README.md "$package_root/usr/share/doc/frameseven/README.md"
+          install -m 0644 LICENSE "$package_root/usr/share/doc/frameseven/LICENSE"
+
+          package_size="$(du -sb "$package_root/usr" | cut -f1)"
+
+          cat > "$package_root/.PKGINFO" <<EOF
+          pkgname = frameseven
+          pkgbase = frameseven
+          pkgver = ${package_version}-1
+          pkgdesc = Offensive web security scanner
+          url = https://github.com/sayseven7/frameseven
+          builddate = $(date +%s)
+          packager = Frame Seven Project
+          size = $package_size
+          arch = $ARCH_ARCH
+          license = MIT
+          EOF
+
+          find "$package_root" -type d -exec chmod 0755 {} +
+          chmod 0644 "$package_root/.PKGINFO"
+
+          tar \
+            --zstd \
+            --owner=0 \
+            --group=0 \
+            -cf "dist/$package_file" \
+            -C "$package_root" \
+            .PKGINFO \
+            usr
+
+          tar --zstd -tf "dist/$package_file"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -202,7 +335,7 @@ jobs:
 
       - name: Create checksums
         working-directory: dist
-        run: sha256sum frameseven_* > SHA256SUMS
+        run: sha256sum frameseven* > SHA256SUMS
 
       - name: Upload files to GitHub Release
         env:
