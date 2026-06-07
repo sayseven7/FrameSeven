@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/sayseven7/frameseven/internal/finding"
@@ -49,6 +50,27 @@ func WriteJSON(w io.Writer, rep Report) error {
 	enc.SetIndent("", "  ")
 
 	return enc.Encode(rep)
+}
+
+// RenderText returns the human-readable CLI report as a string. The output is
+// byte-for-byte identical to what WriteText prints to the CLI, so MCP callers
+// can present a report in the same format the CLI produces.
+func RenderText(rep Report) string {
+	var b strings.Builder
+	WriteText(&b, rep)
+
+	return b.String()
+}
+
+// RenderMarkdown returns the Markdown report as a string, matching the file the
+// CLI writes alongside the text report.
+func RenderMarkdown(rep Report) (string, error) {
+	var b strings.Builder
+	if err := WriteMarkdown(&b, rep); err != nil {
+		return "", err
+	}
+
+	return b.String(), nil
 }
 
 // WriteText renders a human-readable report grouped from most to least severe.

@@ -26,7 +26,9 @@ Tools:
 Tips:
   - normalize_tools validates a selection without running any probes.
   - extra_tools composes multiple scanners in a single call.
-  - timeout_seconds and rate_requests override scan defaults.`
+  - timeout_seconds and rate_requests override scan defaults.
+  - report runs the selected tools and returns the result in the CLI report
+    format (text and/or Markdown) for a CLI-identical write-up.`
 
 // NewServer builds the FrameSeven MCP server.
 func NewServer() *mcpsdk.Server {

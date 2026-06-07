@@ -33,6 +33,15 @@ func RegisterTools(server *mcpsdk.Server) {
 		},
 	}, V1NormalizeTools)
 
+	mcpsdk.AddTool(server, &mcpsdk.Tool{
+		Name:        "frameseven_v1_report",
+		Title:       "Run Scan and Render CLI Report",
+		Description: "Run Framework v1 scanner tools and return the result rendered in the CLI report format (text and/or Markdown), so agents can assemble a report identical to the CLI's.",
+		Annotations: &mcpsdk.ToolAnnotations{
+			DestructiveHint: &destructiveHint,
+		},
+	}, V1Report)
+
 	for _, tool := range scanner.Tools {
 		scanTool := tool
 		mcpsdk.AddTool(server, &mcpsdk.Tool{

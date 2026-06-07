@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -80,6 +81,30 @@ type scanErrorSummary struct {
 	Message string `json:"message" jsonschema:"error message"`
 }
 
+type reportToolInput struct {
+	Target             string   `json:"target" jsonschema:"authorized HTTP or HTTPS target URL"`
+	Tools              []string `json:"tools" jsonschema:"scanner tools to run; empty runs the default scan profile"`
+	TimeoutSeconds     int      `json:"timeout_seconds" jsonschema:"per-request timeout in seconds; uses the project default when empty"`
+	RateRequests       int      `json:"rate_requests" jsonschema:"requests sent by the rate-limit tool; uses the project default when empty"`
+	UserAgent          string   `json:"user_agent" jsonschema:"User-Agent header; uses the project default when empty"`
+	NVDAPIKey          string   `json:"nvd_api_key" jsonschema:"optional NVD API key for CVE lookups"`
+	ActiveScanAccepted bool     `json:"active_scan_accepted" jsonschema:"must be true to confirm this tool may send active security probes to the target"`
+	Format             string   `json:"format" jsonschema:"report format: text (CLI), markdown, or both; defaults to text"`
+}
+
+type reportToolOutput struct {
+	Version        string   `json:"version" jsonschema:"framework version"`
+	Target         string   `json:"target" jsonschema:"scanned target"`
+	SelectedTools  []string `json:"selected_tools" jsonschema:"normalized scanner tools that were executed"`
+	Duration       string   `json:"duration" jsonschema:"scan duration"`
+	Status         string   `json:"status" jsonschema:"complete when no tool errors were recorded, otherwise incomplete"`
+	FindingsCount  int      `json:"findings_count" jsonschema:"number of findings in the report"`
+	ErrorsCount    int      `json:"errors_count" jsonschema:"number of tool errors recorded"`
+	Format         string   `json:"format" jsonschema:"report format that was rendered"`
+	ReportText     string   `json:"report_text,omitempty" jsonschema:"report rendered in the CLI text format"`
+	ReportMarkdown string   `json:"report_markdown,omitempty" jsonschema:"report rendered in Markdown"`
+}
+
 // V1ListTools returns the Framework v1 tool catalog.
 func V1ListTools(ctx context.Context, req *mcpsdk.CallToolRequest, input listToolsInput) (*mcpsdk.CallToolResult, listToolsOutput, error) {
 	var tools []toolInfo
@@ -149,6 +174,93 @@ func buildScanToolOutput(toolName string, selected []string, rep report.Report) 
 		Findings:      summarizeFindings(rep.Findings),
 		Errors:        summarizeErrors(rep.Errors),
 	}
+}
+
+// V1Report runs a scan and renders the result in the same format the CLI
+// produces, so MCP agents can assemble a report identical to the CLI's.
+func V1Report(ctx context.Context, req *mcpsdk.CallToolRequest, input reportToolInput) (*mcpsdk.CallToolResult, reportToolOutput, error) {
+	if !input.ActiveScanAccepted {
+		return nil, reportToolOutput{}, errors.New("active_scan_accepted must be true before running scanner tools")
+	}
+
+	format, err := normalizeReportFormat(input.Format)
+	if err != nil {
+		return nil, reportToolOutput{}, err
+	}
+
+	selected, err := scanner.NormalizeTools(input.Tools)
+	if err != nil {
+		return nil, reportToolOutput{}, err
+	}
+
+	cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.RateRequests, input.UserAgent, input.NVDAPIKey)
+	if err := cfg.Validate(); err != nil {
+		return nil, reportToolOutput{}, err
+	}
+
+	rep := scanner.Scan(&cfg)
+
+	out, err := buildReportToolOutput(selected, format, rep)
+	if err != nil {
+		return nil, reportToolOutput{}, err
+	}
+
+	return nil, out, nil
+}
+
+func buildReportToolOutput(selected []string, format string, rep report.Report) (reportToolOutput, error) {
+	out := reportToolOutput{
+		Version:       rep.SchemaVersion,
+		Target:        rep.Target,
+		SelectedTools: selected,
+		Duration:      rep.Duration,
+		Status:        reportStatus(rep),
+		FindingsCount: len(rep.Findings),
+		ErrorsCount:   len(rep.Errors),
+		Format:        format,
+	}
+
+	if format == reportFormatText || format == reportFormatBoth {
+		out.ReportText = report.RenderText(rep)
+	}
+
+	if format == reportFormatMarkdown || format == reportFormatBoth {
+		markdown, err := report.RenderMarkdown(rep)
+		if err != nil {
+			return reportToolOutput{}, err
+		}
+
+		out.ReportMarkdown = markdown
+	}
+
+	return out, nil
+}
+
+const (
+	reportFormatText     = "text"
+	reportFormatMarkdown = "markdown"
+	reportFormatBoth     = "both"
+)
+
+func normalizeReportFormat(format string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "", reportFormatText:
+		return reportFormatText, nil
+	case reportFormatMarkdown, "md":
+		return reportFormatMarkdown, nil
+	case reportFormatBoth, "all":
+		return reportFormatBoth, nil
+	default:
+		return "", fmt.Errorf("unknown report format %q: use text, markdown, or both", format)
+	}
+}
+
+func reportStatus(rep report.Report) string {
+	if len(rep.Errors) > 0 {
+		return "incomplete"
+	}
+
+	return "complete"
 }
 
 func buildScanConfig(target string, selected []string, timeoutSeconds, rateRequests int, userAgent, nvdAPIKey string) config.Config {

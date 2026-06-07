@@ -75,6 +75,90 @@ func TestBuildScanToolOutput(t *testing.T) {
 	}
 }
 
+func TestV1ReportRequiresActiveScanAcceptance(t *testing.T) {
+	_, _, err := V1Report(context.Background(), nil, reportToolInput{
+		ActiveScanAccepted: false,
+	})
+	if err == nil {
+		t.Fatal("expected error when active_scan_accepted is false")
+	}
+}
+
+func TestV1ReportRejectsUnknownFormat(t *testing.T) {
+	_, _, err := V1Report(context.Background(), nil, reportToolInput{
+		Target:             "http://example.com",
+		ActiveScanAccepted: true,
+		Format:             "pdf",
+	})
+	if err == nil {
+		t.Fatal("expected error for unknown report format")
+	}
+}
+
+func TestNormalizeReportFormat(t *testing.T) {
+	cases := map[string]string{
+		"":         reportFormatText,
+		"text":     reportFormatText,
+		"MarkDown": reportFormatMarkdown,
+		"md":       reportFormatMarkdown,
+		"both":     reportFormatBoth,
+		"all":      reportFormatBoth,
+	}
+
+	for in, want := range cases {
+		got, err := normalizeReportFormat(in)
+		if err != nil {
+			t.Fatalf("normalizeReportFormat(%q): %v", in, err)
+		}
+
+		if got != want {
+			t.Errorf("normalizeReportFormat(%q) = %q, want %q", in, got, want)
+		}
+	}
+
+	if _, err := normalizeReportFormat("xml"); err == nil {
+		t.Error("expected error for unknown format")
+	}
+}
+
+func TestBuildReportToolOutput(t *testing.T) {
+	out, err := buildReportToolOutput([]string{"recon"}, reportFormatBoth, reportFixture())
+	if err != nil {
+		t.Fatalf("buildReportToolOutput: %v", err)
+	}
+
+	if out.Status != "complete" {
+		t.Errorf("status = %q, want complete", out.Status)
+	}
+
+	if out.FindingsCount != 1 {
+		t.Errorf("findings_count = %d, want 1", out.FindingsCount)
+	}
+
+	if !strings.Contains(out.ReportText, "Test Finding") {
+		t.Errorf("report_text missing finding: %q", out.ReportText)
+	}
+
+	if !strings.Contains(out.ReportMarkdown, "# frameseven Scan Report") {
+		t.Errorf("report_markdown missing header: %q", out.ReportMarkdown)
+	}
+}
+
+func TestBuildReportToolOutputTextOnly(t *testing.T) {
+	out, err := buildReportToolOutput([]string{"recon"}, reportFormatText, reportFixture())
+	if err != nil {
+		t.Fatalf("buildReportToolOutput: %v", err)
+	}
+
+	if out.ReportText == "" {
+		t.Error("expected report_text to be rendered")
+	}
+
+	if out.ReportMarkdown != "" {
+		t.Error("expected report_markdown to be empty for text format")
+	}
+}
+
 func reportFixture() report.Report {
 	return report.Report{
 		SchemaVersion: "v1",
