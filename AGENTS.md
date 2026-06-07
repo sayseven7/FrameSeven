@@ -68,6 +68,18 @@ Documentation must also reference the version explicitly, for example:
 
 ---
 
+## Pending Improvements
+
+- Team-identified problems that still need correction must be documented under `pending-improvements/v1/`.
+- Every file in that directory must use the `.md` extension.
+- File names must clearly identify the problem.
+- Each document must clearly describe the problem, its impact, and the expected correction.
+- Do not use the directory for general ideas, feature requests, or completed work.
+- Remove a pending-improvement document as soon as its problem has been corrected and verified.
+- Keep the directory aligned with the framework version it describes.
+
+---
+
 ## Command Rules
 
 ### Go

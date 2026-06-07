@@ -16,8 +16,22 @@ import (
 )
 
 const nvdEndpoint = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+const cpeEndpoint = "https://services.nvd.nist.gov/rest/json/cpes/2.0"
 
 const resultsPerProduct = 5
+const cpeResultsPerProduct = 20
+
+type cpeResponse struct {
+	Products []struct {
+		CPE nvdCPE `json:"cpe"`
+	} `json:"products"`
+}
+
+type nvdCPE struct {
+	Deprecated bool             `json:"deprecated"`
+	CPEName    string           `json:"cpeName"`
+	Titles     []nvdDescription `json:"titles"`
+}
 
 // nvdResponse mirrors the subset of the NVD API 2.0 schema we consume.
 type nvdResponse struct {
@@ -63,12 +77,17 @@ func Run(cfg *config.Config, client *http.Client, surface recon.Surface) []findi
 			continue
 		}
 
-		data, ok := lookup(cfg, client, keyword)
+		cpeName, ok := resolveCPE(cfg, client, tech)
 		if !ok {
 			continue
 		}
 
-		for _, f := range parseNVD(data, keyword) {
+		data, ok := lookup(cfg, client, cpeName)
+		if !ok {
+			continue
+		}
+
+		for _, f := range parseNVD(data, keyword, cpeName) {
 			if seen[f.Title] {
 				continue
 			}
@@ -91,12 +110,29 @@ func versionKeyword(tech recon.Technology) string {
 	return tech.Name + " " + tech.Version
 }
 
-func lookup(cfg *config.Config, client *http.Client, keyword string) ([]byte, bool) {
+func resolveCPE(cfg *config.Config, client *http.Client, tech recon.Technology) (string, bool) {
 	q := url.Values{}
-	q.Set("keywordSearch", keyword)
+	q.Set("keywordSearch", versionKeyword(tech))
+	q.Set("resultsPerPage", strconv.Itoa(cpeResultsPerProduct))
+
+	body, ok := requestNVD(cfg, client, cpeEndpoint+"?"+q.Encode())
+	if !ok {
+		return "", false
+	}
+
+	return parseExactCPE(body, tech)
+}
+
+func lookup(cfg *config.Config, client *http.Client, cpeName string) ([]byte, bool) {
+	q := url.Values{}
+	q.Set("cpeName", cpeName)
 	q.Set("resultsPerPage", strconv.Itoa(resultsPerProduct))
 
-	req, err := http.NewRequest(http.MethodGet, nvdEndpoint+"?"+q.Encode(), nil)
+	return requestNVD(cfg, client, nvdEndpoint+"?"+q.Encode())
+}
+
+func requestNVD(cfg *config.Config, client *http.Client, endpoint string) ([]byte, bool) {
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, false
 	}
@@ -125,9 +161,68 @@ func lookup(cfg *config.Config, client *http.Client, keyword string) ([]byte, bo
 	return body, true
 }
 
+func parseExactCPE(data []byte, tech recon.Technology) (string, bool) {
+	var parsed cpeResponse
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return "", false
+	}
+
+	var matches []string
+	seen := map[string]bool{}
+
+	for _, product := range parsed.Products {
+		cpe := product.CPE
+		if cpe.Deprecated || cpe.CPEName == "" || !cpeMatchesTechnology(cpe, tech) || seen[cpe.CPEName] {
+			continue
+		}
+
+		seen[cpe.CPEName] = true
+		matches = append(matches, cpe.CPEName)
+	}
+
+	if len(matches) != 1 {
+		return "", false
+	}
+
+	return matches[0], true
+}
+
+func cpeMatchesTechnology(cpe nvdCPE, tech recon.Technology) bool {
+	parts := strings.Split(cpe.CPEName, ":")
+	if len(parts) < 6 || parts[5] != tech.Version {
+		return false
+	}
+
+	name := normalizeProductName(tech.Name)
+	if name == "" {
+		return false
+	}
+
+	for _, title := range cpe.Titles {
+		if title.Lang != "en" {
+			continue
+		}
+
+		normalizedTitle := normalizeProductName(title.Value)
+		if strings.Contains(" "+normalizedTitle+" ", " "+name+" ") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func normalizeProductName(value string) string {
+	value = strings.ToLower(value)
+
+	return strings.Join(strings.FieldsFunc(value, func(r rune) bool {
+		return r < 'a' || r > 'z'
+	}), " ")
+}
+
 // parseNVD turns an NVD API response into findings. It is the pure, testable
 // core of the module.
-func parseNVD(data []byte, keyword string) []finding.Finding {
+func parseNVD(data []byte, keyword, cpeName string) []finding.Finding {
 	var parsed nvdResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return nil
@@ -147,7 +242,7 @@ func parseNVD(data []byte, keyword string) []finding.Finding {
 			CVSS:        score,
 			Description: description(v.CVE.Descriptions),
 			Evidence: finding.Evidence{
-				Extracted: "matched component: " + keyword + " | " + v.CVE.ID,
+				Extracted: "matched component: " + keyword + "\nCPE: " + cpeName + "\nCVE: " + v.CVE.ID,
 			},
 			NextSteps: []string{
 				"Upgrade " + keyword + " to a fixed release.",

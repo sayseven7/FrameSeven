@@ -30,7 +30,7 @@ const fixture = `{
 }`
 
 func TestParseNVD(t *testing.T) {
-	findings := parseNVD([]byte(fixture), "Apache 2.4.49")
+	findings := parseNVD([]byte(fixture), "Apache 2.4.49", "cpe:2.3:a:apache:http_server:2.4.49:*:*:*:*:*:*:*")
 
 	if len(findings) != 1 {
 		t.Fatalf("expected 1 finding, got %d", len(findings))
@@ -56,8 +56,57 @@ func TestParseNVD(t *testing.T) {
 }
 
 func TestParseNVDInvalid(t *testing.T) {
-	if got := parseNVD([]byte("not json"), "x"); got != nil {
+	if got := parseNVD([]byte("not json"), "x", "cpe"); got != nil {
 		t.Fatalf("expected nil on invalid JSON, got %+v", got)
+	}
+}
+
+func TestParseExactCPE(t *testing.T) {
+	data := []byte(`{
+		"products": [
+			{
+				"cpe": {
+					"deprecated": false,
+					"cpeName": "cpe:2.3:a:apache:http_server:2.4.49:*:*:*:*:*:*:*",
+					"titles": [
+						{"lang": "en", "value": "Apache HTTP Server 2.4.49"}
+					]
+				}
+			}
+		]
+	}`)
+
+	got, ok := parseExactCPE(data, recon.Technology{Name: "Apache", Version: "2.4.49"})
+	if !ok {
+		t.Fatal("expected an exact CPE match")
+	}
+
+	want := "cpe:2.3:a:apache:http_server:2.4.49:*:*:*:*:*:*:*"
+	if got != want {
+		t.Errorf("CPE = %q, want %q", got, want)
+	}
+}
+
+func TestParseExactCPERejectsAmbiguousMatches(t *testing.T) {
+	data := []byte(`{
+		"products": [
+			{
+				"cpe": {
+					"cpeName": "cpe:2.3:a:vendor:product:1.0:*:*:*:*:*:*:*",
+					"titles": [{"lang": "en", "value": "Product 1.0"}]
+				}
+			},
+			{
+				"cpe": {
+					"cpeName": "cpe:2.3:a:other:product:1.0:*:*:*:*:*:*:*",
+					"titles": [{"lang": "en", "value": "Product 1.0"}]
+				}
+			}
+		]
+	}`)
+
+	if got, ok := parseExactCPE(data, recon.Technology{Name: "Product", Version: "1.0"}); ok || got != "" {
+		t.Fatalf("expected ambiguous CPE matches to be rejected, got %q", got)
 	}
 }
 

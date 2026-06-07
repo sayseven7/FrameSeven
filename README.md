@@ -27,6 +27,7 @@ internal/
     scanner/                       # orchestrates recon + all modules -> report
 
 cmd/cli/v1/main.go                 # CLI entrypoint
+pending-improvements/v1/           # confirmed problems still awaiting correction
 ```
 
 Each finding carries a proof of concept (request, response, extracted value), CVSS, CWE,
@@ -67,3 +68,6 @@ CVE lookup rate limit).
 ```bash
 NVD_API_KEY=xxxx go run cmd/cli/v1/main.go -url https://target.example
 ```
+
+The CLI output format v1 reports `schema_version: "v1"` in JSON. If a module cannot
+complete network requests, the report includes module errors and the CLI exits with status 1.

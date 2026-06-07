@@ -35,6 +35,17 @@ cmd/cli/v1/
 
 If a Go wrapper calls another implementation, keep the version visible in the same structure whenever that code is part of the framework surface.
 
+## Pending Improvements
+
+Problems identified by the team that still require correction are tracked in `pending-improvements/v1/`.
+
+- Every file in the directory must be a Markdown file with the `.md` extension.
+- Use a clear file name that identifies the specific problem.
+- Clearly document the problem, its impact, and the expected correction.
+- Add only confirmed problems identified by the team, not general ideas or feature requests.
+- Remove the document after the correction has been implemented and verified.
+- Use the directory version that matches the affected framework contract.
+
 ### Documentation
 
 When documenting framework behavior, always mention the version in titles, sections, or examples.

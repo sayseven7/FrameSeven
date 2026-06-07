@@ -28,11 +28,19 @@ func sampleReport() Report {
 		},
 	}
 
-	return New("https://example.com", time.Unix(0, 0).UTC(), 2*time.Second, surface, findings)
+	errors := []ScanErrorV1{
+		{Module: "recon", Message: "request failed"},
+	}
+
+	return New("v1", "https://example.com", time.Unix(0, 0).UTC(), 2*time.Second, surface, findings, errors)
 }
 
 func TestNewSortsFindings(t *testing.T) {
 	rep := sampleReport()
+
+	if rep.SchemaVersion != "v1" {
+		t.Fatalf("schema version = %q, want v1", rep.SchemaVersion)
+	}
 
 	if rep.Findings[0].Severity != finding.Critical {
 		t.Fatalf("expected critical first, got %v", rep.Findings[0].Severity)
@@ -45,7 +53,7 @@ func TestWriteTextContainsKeyFields(t *testing.T) {
 
 	out := buf.String()
 
-	for _, want := range []string{"SQLi", "CVSS: 9.8", "CWE-89", "A03:2025", "use prepared statements", "db: shop"} {
+	for _, want := range []string{"scan status: incomplete", "recon: request failed", "SQLi", "CVSS: 9.8", "CWE-89", "A03:2025", "use prepared statements", "db: shop"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("text report missing %q\n%s", want, out)
 		}
@@ -63,6 +71,10 @@ func TestWriteJSONRoundTrips(t *testing.T) {
 
 	if !strings.Contains(out, `"target": "https://example.com"`) {
 		t.Errorf("json missing target\n%s", out)
+	}
+
+	if !strings.Contains(out, `"schema_version": "v1"`) {
+		t.Errorf("json missing schema version\n%s", out)
 	}
 
 	if !strings.Contains(out, `"cvss": 9.8`) {

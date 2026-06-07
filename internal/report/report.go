@@ -14,23 +14,33 @@ import (
 
 // Report is the full result of a scan.
 type Report struct {
-	Target    string            `json:"target"`
-	StartedAt time.Time         `json:"started_at"`
-	Duration  string            `json:"duration"`
-	Surface   recon.Surface     `json:"surface"`
-	Findings  []finding.Finding `json:"findings"`
+	SchemaVersion string            `json:"schema_version"`
+	Target        string            `json:"target"`
+	StartedAt     time.Time         `json:"started_at"`
+	Duration      string            `json:"duration"`
+	Surface       recon.Surface     `json:"surface"`
+	Findings      []finding.Finding `json:"findings"`
+	Errors        []ScanErrorV1     `json:"errors,omitempty"`
+}
+
+// ScanErrorV1 records a module that could not complete part of its scan.
+type ScanErrorV1 struct {
+	Module  string `json:"module"`
+	Message string `json:"message"`
 }
 
 // New builds a report, sorting findings by severity.
-func New(target string, startedAt time.Time, duration time.Duration, surface recon.Surface, findings []finding.Finding) Report {
+func New(schemaVersion, target string, startedAt time.Time, duration time.Duration, surface recon.Surface, findings []finding.Finding, errors []ScanErrorV1) Report {
 	finding.SortBySeverity(findings)
 
 	return Report{
-		Target:    target,
-		StartedAt: startedAt,
-		Duration:  duration.Round(time.Millisecond).String(),
-		Surface:   surface,
-		Findings:  findings,
+		SchemaVersion: schemaVersion,
+		Target:        target,
+		StartedAt:     startedAt,
+		Duration:      duration.Round(time.Millisecond).String(),
+		Surface:       surface,
+		Findings:      findings,
+		Errors:        errors,
 	}
 }
 
@@ -48,6 +58,17 @@ func WriteText(w io.Writer, rep Report) {
 	fmt.Fprintf(w, "target:   %s\n", rep.Target)
 	fmt.Fprintf(w, "started:  %s\n", rep.StartedAt.Format(time.RFC3339))
 	fmt.Fprintf(w, "duration: %s\n\n", rep.Duration)
+
+	if len(rep.Errors) > 0 {
+		fmt.Fprintf(w, "scan status: incomplete\n")
+		fmt.Fprintf(w, "errors: %d\n", len(rep.Errors))
+
+		for _, scanErr := range rep.Errors {
+			fmt.Fprintf(w, "  - %s: %s\n", scanErr.Module, scanErr.Message)
+		}
+
+		fmt.Fprintf(w, "\n")
+	}
 
 	writeSurface(w, rep.Surface)
 

@@ -47,6 +47,10 @@ func main() {
 
 		fmt.Fprintf(os.Stderr, "\nJSON report written to %s\n", *output)
 	}
+
+	if len(rep.Errors) > 0 {
+		os.Exit(1)
+	}
 }
 
 func writeJSONFile(path string, rep report.Report) error {

@@ -12,20 +12,51 @@ import (
 func TestNewClient(t *testing.T) {
 	cfg := config.New("https://example.com")
 	cfg.Timeout = 7 * time.Second
+	recorder := &requestErrorRecorder{}
 
-	client := newClient(&cfg)
+	client := newClient(&cfg, recorder)
 
 	if client.Timeout != 7*time.Second {
 		t.Errorf("timeout = %v, want 7s", client.Timeout)
 	}
 
-	transport, ok := client.Transport.(*http.Transport)
+	recording, ok := client.Transport.(*recordingTransport)
 	if !ok {
-		t.Fatalf("transport is not *http.Transport")
+		t.Fatalf("transport is not *recordingTransport")
+	}
+
+	transport, ok := recording.base.(*http.Transport)
+	if !ok {
+		t.Fatalf("base transport is not *http.Transport")
 	}
 
 	if transport.TLSClientConfig == nil || !transport.TLSClientConfig.InsecureSkipVerify {
 		t.Errorf("expected InsecureSkipVerify to be enabled for scanning")
+	}
+}
+
+func TestClientBlocksCrossOriginRedirect(t *testing.T) {
+	cfg := config.New("https://example.com")
+	recorder := &requestErrorRecorder{}
+	client := newClient(&cfg, recorder)
+
+	source, err := http.NewRequest(http.MethodGet, "https://example.com/start", nil)
+	if err != nil {
+		t.Fatalf("build source request: %v", err)
+	}
+
+	destination, err := http.NewRequest(http.MethodGet, "https://other.example/end", nil)
+	if err != nil {
+		t.Fatalf("build destination request: %v", err)
+	}
+
+	if err := client.CheckRedirect(destination, []*http.Request{source}); err == nil {
+		t.Fatal("expected cross-origin redirect to fail")
+	}
+
+	errors := recorder.Take("test")
+	if len(errors) == 0 {
+		t.Fatal("expected redirect error to be recorded")
 	}
 }
 
