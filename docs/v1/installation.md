@@ -5,8 +5,8 @@
 Versioned binaries and Debian packages are published through
 [GitHub Releases](https://github.com/sayseven7/frameseven/releases).
 
-Installation through `go install` is not supported yet. Use a release artifact
-or build from source.
+GitHub Releases is the official distribution channel. Use a release artifact
+or build the project from source for development.
 
 Each release provides:
 
