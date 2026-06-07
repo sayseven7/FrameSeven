@@ -28,10 +28,11 @@ For a development build that has not been installed:
 | `-timeout` | `10s` | Timeout applied to each HTTP request |
 | `-rate` | `50` | Requests sent by the rate-limit module |
 | `-ua` | `frameseven/v1` | User-Agent header sent by the scanner |
-| `-o` | none | Path for an optional JSON report |
+| `-out`, `-o` | `reports` | Directory for generated reports and the scan log |
 | `-interactive`, `-i` | disabled | Configure the scan with an interactive wizard |
 | `-yes`, `-y` | disabled | Skip the wizard's final confirmation |
 | `-quiet`, `-q` | disabled | Hide banner and progress messages |
+| `-verbose`, `-v` | disabled | Include HTTP request, response, duration, and error debug logs |
 | `-version` | disabled | Print the installed build version |
 | `-list-modules` | disabled | List all Framework v1 scanner modules |
 
@@ -53,7 +54,7 @@ interactive setup. It asks for:
 - Per-request timeout
 - Rate-limit request count
 - User-Agent
-- Optional JSON report path
+- Output directory
 
 The wizard displays the resulting configuration and requires confirmation
 before starting because Framework v1 sends active security probes.
@@ -92,13 +93,21 @@ frameseven \
   -rate 20
 ```
 
-Set a custom User-Agent and write JSON:
+Set a custom User-Agent and output directory:
 
 ```bash
 frameseven \
   -url https://target.example \
   -ua "authorized-security-test/v1" \
-  -o report.json
+  -out audit-results
+```
+
+Enable request-level debug logs:
+
+```bash
+frameseven \
+  -url https://target.example \
+  --verbose
 ```
 
 List the modules included in Framework v1:
@@ -118,7 +127,7 @@ frameseven --version
 | Code | Meaning |
 |---:|---|
 | `0` | The scan completed without recorded module request errors |
-| `1` | A module recorded a network error, or the JSON report could not be written |
+| `1` | A module recorded a network error, or an output file could not be written |
 | `2` | CLI configuration or flag validation failed |
 
 Exit code `0` does not mean the target has no findings. Findings are reported
@@ -131,3 +140,17 @@ independently from command success.
 - Cross-origin redirects are blocked.
 - Network failures are attached to the module that was running.
 - Findings are sorted from highest to lowest severity.
+
+## Progress and Logs
+
+CLI v1 prints the start and completion of every scanner module to standard
+error. Each completion message includes elapsed time, findings, and recorded
+errors.
+
+The same messages are written to `scan.log` in the output directory.
+`--verbose` adds request-level HTTP details intended for debugging. These logs
+can contain target URLs and probe payloads, so handle them as security test
+data.
+
+`--quiet` hides log messages from the terminal. The complete execution history,
+including warnings and errors, remains available in `scan.log`.

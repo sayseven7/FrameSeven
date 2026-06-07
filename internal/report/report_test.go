@@ -2,6 +2,8 @@ package report
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -79,5 +81,65 @@ func TestWriteJSONRoundTrips(t *testing.T) {
 
 	if !strings.Contains(out, `"cvss": 9.8`) {
 		t.Errorf("json missing cvss\n%s", out)
+	}
+}
+
+func TestWriteHTMLContainsEscapedFinding(t *testing.T) {
+	rep := sampleReport()
+	rep.Findings[0].Title = `<script>alert("x")</script>`
+
+	var buf bytes.Buffer
+	if err := WriteHTML(&buf, rep); err != nil {
+		t.Fatalf("WriteHTML: %v", err)
+	}
+
+	out := buf.String()
+	if strings.Contains(out, `<script>alert`) {
+		t.Fatalf("HTML contains unescaped finding title:\n%s", out)
+	}
+
+	if !strings.Contains(out, "&lt;script&gt;") {
+		t.Fatalf("HTML missing escaped finding title:\n%s", out)
+	}
+
+	for _, want := range []string{"Executive overview", "Severity distribution", "Attack surface", "Finding index", `id="finding-1"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("HTML report missing %q\n%s", want, out)
+		}
+	}
+}
+
+func TestWriteMarkdownContainsFindingsAndErrors(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WriteMarkdown(&buf, sampleReport()); err != nil {
+		t.Fatalf("WriteMarkdown: %v", err)
+	}
+
+	out := buf.String()
+	for _, want := range []string{"# frameseven Scan Report", "## Findings", "SQLi", "request failed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("Markdown report missing %q\n%s", want, out)
+		}
+	}
+}
+
+func TestWriteFilesCreatesAllFormats(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "reports")
+
+	files, err := WriteFiles(dir, sampleReport())
+	if err != nil {
+		t.Fatalf("WriteFiles: %v", err)
+	}
+
+	for _, path := range []string{files.HTML, files.Markdown, files.JSON} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Errorf("%s was not created: %v", path, err)
+			continue
+		}
+
+		if info.Size() == 0 {
+			t.Errorf("%s is empty", path)
+		}
 	}
 }

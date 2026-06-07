@@ -6,7 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +19,7 @@ import (
 )
 
 const banner = "frameseven CLI v1 - offensive web scanner"
+const defaultOutputDir = "reports"
 
 var buildVersion = "development"
 
@@ -41,10 +44,11 @@ type options struct {
 	timeout     time.Duration
 	rate        int
 	userAgent   string
-	output      string
+	outputDir   string
 	interactive bool
 	yes         bool
 	quiet       bool
+	verbose     bool
 	version     bool
 	listModules bool
 }
@@ -102,26 +106,41 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 		return 2
 	}
 
-	if !opts.quiet {
-		fmt.Fprintf(stderr, "%s\nscanning %s ...\n\n", banner, cfg.Target)
+	logFile, err := openLogFile(opts.outputDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "error creating scan log: %v\n", err)
+		return 1
 	}
+	defer logFile.Close()
+
+	logOutput := io.Writer(logFile)
+	if !opts.quiet {
+		logOutput = io.MultiWriter(stderr, logFile)
+	}
+
+	cfg.Logger = log.New(logOutput, "", log.Ltime)
+	cfg.Verbose = opts.verbose
+	cfg.Logger.Printf("INFO  %s", banner)
+	cfg.Logger.Printf("INFO  scan started for %s", cfg.Target)
+	cfg.Logger.Printf("INFO  output directory: %s", opts.outputDir)
 
 	rep := scan(&cfg)
 
 	report.WriteText(stdout, rep)
 
-	if opts.output != "" {
-		if err := writeJSONFile(opts.output, rep); err != nil {
-			fmt.Fprintf(stderr, "error writing report: %v\n", err)
-			return 1
-		}
-
-		if !opts.quiet {
-			fmt.Fprintf(stderr, "\nJSON report written to %s\n", opts.output)
-		}
+	files, err := report.WriteFiles(opts.outputDir, rep)
+	if err != nil {
+		cfg.Logger.Printf("ERROR could not write reports: %v", err)
+		return 1
 	}
 
+	cfg.Logger.Printf("INFO  HTML report: %s", files.HTML)
+	cfg.Logger.Printf("INFO  Markdown report: %s", files.Markdown)
+	cfg.Logger.Printf("INFO  JSON report: %s", files.JSON)
+	cfg.Logger.Printf("INFO  scan log: %s", filepath.Join(opts.outputDir, "scan.log"))
+
 	if len(rep.Errors) > 0 {
+		cfg.Logger.Printf("WARN  scan finished with %d recorded module error(s)", len(rep.Errors))
 		return 1
 	}
 
@@ -137,13 +156,16 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.DurationVar(&opts.timeout, "timeout", config.DefaultTimeout, "per-request timeout")
 	flags.IntVar(&opts.rate, "rate", config.DefaultRateRequests, "requests for the rate-limit test")
 	flags.StringVar(&opts.userAgent, "ua", config.DefaultUserAgent, "User-Agent header")
-	flags.StringVar(&opts.output, "o", "", "write the JSON report to this file")
+	flags.StringVar(&opts.outputDir, "out", defaultOutputDir, "directory for reports and scan logs")
+	flags.StringVar(&opts.outputDir, "o", defaultOutputDir, "directory for reports and scan logs")
 	flags.BoolVar(&opts.interactive, "interactive", false, "configure the scan interactively")
 	flags.BoolVar(&opts.interactive, "i", false, "configure the scan interactively")
 	flags.BoolVar(&opts.yes, "yes", false, "accept the interactive scan confirmation")
 	flags.BoolVar(&opts.yes, "y", false, "accept the interactive scan confirmation")
 	flags.BoolVar(&opts.quiet, "quiet", false, "hide progress messages")
 	flags.BoolVar(&opts.quiet, "q", false, "hide progress messages")
+	flags.BoolVar(&opts.verbose, "verbose", false, "show HTTP request and response debug logs")
+	flags.BoolVar(&opts.verbose, "v", false, "show HTTP request and response debug logs")
 	flags.BoolVar(&opts.version, "version", false, "show the installed version")
 	flags.BoolVar(&opts.listModules, "list-modules", false, "list scanner modules")
 
@@ -179,7 +201,7 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 	opts.timeout = promptDuration(reader, output, "Per-request timeout", opts.timeout)
 	opts.rate = promptInt(reader, output, "Rate-limit request count", opts.rate)
 	opts.userAgent = prompt(reader, output, "User-Agent", opts.userAgent)
-	opts.output = prompt(reader, output, "JSON report path (optional)", opts.output)
+	opts.outputDir = prompt(reader, output, "Output directory", opts.outputDir)
 
 	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Scan configuration")
@@ -187,12 +209,7 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 	fmt.Fprintf(output, "  Timeout:    %s\n", opts.timeout)
 	fmt.Fprintf(output, "  Rate count: %d\n", opts.rate)
 	fmt.Fprintf(output, "  User-Agent: %s\n", opts.userAgent)
-
-	if opts.output == "" {
-		fmt.Fprintln(output, "  JSON:       disabled")
-	} else {
-		fmt.Fprintf(output, "  JSON:       %s\n", opts.output)
-	}
+	fmt.Fprintf(output, "  Output:     %s\n", opts.outputDir)
 
 	if opts.yes {
 		return opts, true
@@ -267,12 +284,16 @@ func isTerminal(file *os.File) bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
-func writeJSONFile(path string, rep report.Report) error {
-	file, err := os.Create(path) // #nosec G304 - path is provided by the operator
-	if err != nil {
-		return err
+func openLogFile(dir string) (*os.File, error) {
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return nil, err
 	}
-	defer file.Close()
 
-	return report.WriteJSON(file, rep)
+	path := filepath.Join(dir, "scan.log")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600) // #nosec G304 - the operator selects the output directory
+	if err != nil {
+		return nil, err
+	}
+
+	return file, nil
 }

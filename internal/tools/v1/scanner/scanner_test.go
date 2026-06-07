@@ -1,8 +1,11 @@
 package scanner
 
 import (
+	"bytes"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +77,9 @@ func TestScanProducesReport(t *testing.T) {
 	cfg := config.New(srv.URL)
 	cfg.Timeout = 5 * time.Second
 	cfg.RateRequests = 3
+	var logs bytes.Buffer
+	cfg.Logger = log.New(&logs, "", 0)
+	cfg.Verbose = true
 
 	rep := Scan(&cfg)
 
@@ -99,5 +105,11 @@ func TestScanProducesReport(t *testing.T) {
 
 	if !hasRateLimit {
 		t.Errorf("expected a rate-limit finding, got %+v", rep.Findings)
+	}
+
+	for _, want := range []string{"[recon] started", "[cve] completed", "HTTP request", "scan completed"} {
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("scan log missing %q:\n%s", want, logs.String())
+		}
 	}
 }

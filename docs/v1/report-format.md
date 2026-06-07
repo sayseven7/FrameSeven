@@ -1,7 +1,20 @@
 # CLI Output Format v1
 
-frameseven produces a human-readable report on standard output. When `-o` is
-provided, it also writes an indented JSON report.
+frameseven produces a human-readable report on standard output and writes
+persistent reports to the output directory. The default directory is
+`./reports` and can be changed with `-out` or `-o`.
+
+## Output Files
+
+| File | Description |
+|---|---|
+| `report.html` | Styled, self-contained browser report with expandable evidence |
+| `report.md` | Portable human-readable report |
+| `report.json` | Structured CLI output contract v1 |
+| `scan.log` | Module progress and optional request-level debug details |
+
+Report files use restricted permissions because findings and evidence can
+contain sensitive target data.
 
 ## JSON Contract
 
@@ -88,4 +101,3 @@ with status `1`.
   "findings": []
 }
 ```
-

@@ -1,5 +1,4 @@
-// Package report defines the scan result structure and renders it as
-// human-readable text and as structured JSON.
+// Package report defines the scan result structure and renders CLI v1 reports.
 package report
 
 import (

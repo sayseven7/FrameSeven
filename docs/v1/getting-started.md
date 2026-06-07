@@ -18,19 +18,33 @@ For scripts and repeatable commands, provide the target directly:
 frameseven -url https://target.example
 ```
 
-The command writes the human-readable report to standard output and progress
-or error messages to standard error.
+The command writes a human-readable summary to standard output, module
+progress to standard error, and persistent results to `./reports`.
 
-## Write a JSON Report
+## Generated Reports
+
+Every scan creates:
+
+- `reports/report.html`: styled, self-contained report for browsers
+- `reports/report.md`: portable Markdown report
+- `reports/report.json`: machine-readable CLI output format v1
+- `reports/scan.log`: execution progress and diagnostic messages
+
+Use `-out` or `-o` to select another directory:
 
 ```bash
 frameseven \
   -url https://target.example \
-  -o report.json
+  -out audit-results
 ```
 
-The JSON document uses the CLI output format v1 and includes
-`"schema_version": "v1"`.
+The JSON document includes `"schema_version": "v1"`.
+
+Use `--verbose` when diagnosing a scan. It adds HTTP request, response,
+duration, and network error details to the terminal and `scan.log`.
+
+Library callers can provide a standard `*log.Logger` through `config.Config`.
+Set `Config.Verbose` to include request-level HTTP diagnostics.
 
 ## NVD API Key
 

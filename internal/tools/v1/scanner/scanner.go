@@ -5,6 +5,8 @@ package scanner
 import (
 	"crypto/tls"
 	"errors"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sync"
@@ -26,36 +28,80 @@ import (
 // Scan runs the full pipeline and returns a report.
 func Scan(cfg *config.Config) report.Report {
 	started := time.Now()
+	logger := cfg.Logger
+	if logger == nil {
+		logger = log.New(io.Discard, "", log.Ltime)
+	}
+	cfg.Logger = logger
+
 	recorder := &requestErrorRecorder{}
 	client := newClient(cfg, recorder)
 
 	var findings []finding.Finding
 	var scanErrors []report.ScanErrorV1
 
+	moduleStarted := startModule(logger, "recon", "mapping the target attack surface")
 	surface, reconFindings := recon.Run(cfg, client)
 	findings = append(findings, reconFindings...)
-	scanErrors = append(scanErrors, recorder.Take("recon")...)
+	moduleErrors := recorder.Take("recon")
+	scanErrors = append(scanErrors, moduleErrors...)
+	finishModule(logger, "recon", moduleStarted, len(reconFindings), len(moduleErrors))
 
-	findings = append(findings, sqli.Run(cfg, client, surface)...)
-	scanErrors = append(scanErrors, recorder.Take("sqli")...)
+	moduleStarted = startModule(logger, "sqli", "testing SQL injection vectors")
+	moduleFindings := sqli.Run(cfg, client, surface)
+	findings = append(findings, moduleFindings...)
+	moduleErrors = recorder.Take("sqli")
+	scanErrors = append(scanErrors, moduleErrors...)
+	finishModule(logger, "sqli", moduleStarted, len(moduleFindings), len(moduleErrors))
 
-	findings = append(findings, access.Run(cfg, client, surface)...)
-	scanErrors = append(scanErrors, recorder.Take("access")...)
+	moduleStarted = startModule(logger, "access", "testing unauthenticated access and IDOR behavior")
+	moduleFindings = access.Run(cfg, client, surface)
+	findings = append(findings, moduleFindings...)
+	moduleErrors = recorder.Take("access")
+	scanErrors = append(scanErrors, moduleErrors...)
+	finishModule(logger, "access", moduleStarted, len(moduleFindings), len(moduleErrors))
 
-	findings = append(findings, ssrf.Run(cfg, client, surface)...)
-	scanErrors = append(scanErrors, recorder.Take("ssrf")...)
+	moduleStarted = startModule(logger, "ssrf", "testing server-side request forgery vectors")
+	moduleFindings = ssrf.Run(cfg, client, surface)
+	findings = append(findings, moduleFindings...)
+	moduleErrors = recorder.Take("ssrf")
+	scanErrors = append(scanErrors, moduleErrors...)
+	finishModule(logger, "ssrf", moduleStarted, len(moduleFindings), len(moduleErrors))
 
-	findings = append(findings, lfi.Run(cfg, client, surface)...)
-	scanErrors = append(scanErrors, recorder.Take("lfi")...)
+	moduleStarted = startModule(logger, "lfi", "testing file inclusion and path traversal vectors")
+	moduleFindings = lfi.Run(cfg, client, surface)
+	findings = append(findings, moduleFindings...)
+	moduleErrors = recorder.Take("lfi")
+	scanErrors = append(scanErrors, moduleErrors...)
+	finishModule(logger, "lfi", moduleStarted, len(moduleFindings), len(moduleErrors))
 
-	findings = append(findings, misconfig.Run(cfg, client)...)
-	scanErrors = append(scanErrors, recorder.Take("misconfig")...)
+	moduleStarted = startModule(logger, "misconfig", "checking HTTP and TLS configuration")
+	moduleFindings = misconfig.Run(cfg, client)
+	findings = append(findings, moduleFindings...)
+	moduleErrors = recorder.Take("misconfig")
+	scanErrors = append(scanErrors, moduleErrors...)
+	finishModule(logger, "misconfig", moduleStarted, len(moduleFindings), len(moduleErrors))
 
-	findings = append(findings, ratelimit.Run(cfg, client)...)
-	scanErrors = append(scanErrors, recorder.Take("ratelimit")...)
+	moduleStarted = startModule(logger, "ratelimit", "checking request rate-limit behavior")
+	moduleFindings = ratelimit.Run(cfg, client)
+	findings = append(findings, moduleFindings...)
+	moduleErrors = recorder.Take("ratelimit")
+	scanErrors = append(scanErrors, moduleErrors...)
+	finishModule(logger, "ratelimit", moduleStarted, len(moduleFindings), len(moduleErrors))
 
-	findings = append(findings, cve.Run(cfg, client, surface)...)
-	scanErrors = append(scanErrors, recorder.Take("cve")...)
+	moduleStarted = startModule(logger, "cve", "looking up CVEs for detected products")
+	moduleFindings = cve.Run(cfg, client, surface)
+	findings = append(findings, moduleFindings...)
+	moduleErrors = recorder.Take("cve")
+	scanErrors = append(scanErrors, moduleErrors...)
+	finishModule(logger, "cve", moduleStarted, len(moduleFindings), len(moduleErrors))
+
+	logger.Printf(
+		"INFO  scan completed in %s with %d finding(s) and %d error(s)",
+		time.Since(started).Round(time.Millisecond),
+		len(findings),
+		len(scanErrors),
+	)
 
 	return report.New("v1", cfg.Target, started, time.Since(started), surface, findings, scanErrors)
 }
@@ -73,6 +119,8 @@ func newClient(cfg *config.Config, recorder *requestErrorRecorder) *http.Client 
 		Transport: &recordingTransport{
 			base:     transport,
 			recorder: recorder,
+			logger:   cfg.Logger,
+			verbose:  cfg.Verbose,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) == 0 || sameOrigin(via[0].URL, req.URL) {
@@ -90,15 +138,59 @@ func newClient(cfg *config.Config, recorder *requestErrorRecorder) *http.Client 
 type recordingTransport struct {
 	base     http.RoundTripper
 	recorder *requestErrorRecorder
+	logger   *log.Logger
+	verbose  bool
 }
 
 func (t *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	started := time.Now()
+	if t.verbose {
+		t.logger.Printf("DEBUG HTTP request %s %s", req.Method, req.URL.Redacted())
+	}
+
 	resp, err := t.base.RoundTrip(req)
 	if err != nil {
 		t.recorder.Record(err)
+		if t.verbose {
+			t.logger.Printf(
+				"DEBUG HTTP request failed %s %s after %s: %v",
+				req.Method,
+				req.URL.Redacted(),
+				time.Since(started).Round(time.Millisecond),
+				err,
+			)
+		}
+
+		return nil, err
 	}
 
-	return resp, err
+	if t.verbose {
+		t.logger.Printf(
+			"DEBUG HTTP response %s %s -> %d in %s",
+			req.Method,
+			req.URL.Redacted(),
+			resp.StatusCode,
+			time.Since(started).Round(time.Millisecond),
+		)
+	}
+
+	return resp, nil
+}
+
+func startModule(logger *log.Logger, name, activity string) time.Time {
+	logger.Printf("INFO  [%s] started: %s", name, activity)
+
+	return time.Now()
+}
+
+func finishModule(logger *log.Logger, name string, started time.Time, findings, scanErrors int) {
+	logger.Printf(
+		"INFO  [%s] completed in %s: %d finding(s), %d error(s)",
+		name,
+		time.Since(started).Round(time.Millisecond),
+		findings,
+		scanErrors,
+	)
 }
 
 type requestErrorRecorder struct {

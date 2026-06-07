@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"io"
+	"log"
 	"net/url"
 	"strings"
 	"time"
@@ -20,6 +22,12 @@ type Config struct {
 	// NVDAPIKey is optional. When set it is sent to the NVD API to raise the
 	// request rate limit.
 	NVDAPIKey string
+
+	// Logger receives scan progress and diagnostic messages.
+	Logger *log.Logger
+
+	// Verbose enables request-level diagnostic messages.
+	Verbose bool
 }
 
 const (
@@ -35,6 +43,7 @@ func New(target string) Config {
 		Timeout:      DefaultTimeout,
 		UserAgent:    DefaultUserAgent,
 		RateRequests: DefaultRateRequests,
+		Logger:       log.New(io.Discard, "", log.Ltime),
 	}
 }
 

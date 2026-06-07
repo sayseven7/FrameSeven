@@ -13,6 +13,7 @@ go.sum
 /bin
 /pkg
 /vendor
+reports/
 
 # Python
 __pycache__/

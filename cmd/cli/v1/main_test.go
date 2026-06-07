@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -76,13 +78,14 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	var received config.Config
+	outputDir := t.TempDir()
 
 	input := strings.Join([]string{
 		"https://example.com",
 		"",
 		"",
 		"",
-		"",
+		outputDir,
 		"yes",
 		"",
 	}, "\n")
@@ -112,19 +115,22 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 	if received.UserAgent != config.DefaultUserAgent {
 		t.Errorf("user agent = %q", received.UserAgent)
 	}
+
+	assertReportFiles(t, outputDir)
 }
 
 func TestRunWizardAcceptsCustomValuesWithYesFlag(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	var received config.Config
+	outputDir := t.TempDir()
 
 	input := strings.Join([]string{
 		"https://example.com",
 		"25s",
 		"12",
 		"security-team/v1",
-		"",
+		outputDir,
 	}, "\n")
 
 	code := run([]string{"--interactive", "--yes", "--quiet"}, strings.NewReader(input), &stdout, &stderr, true, func(cfg *config.Config) report.Report {
@@ -152,6 +158,8 @@ func TestRunWizardAcceptsCustomValuesWithYesFlag(t *testing.T) {
 	if strings.Contains(stderr.String(), "scanning") {
 		t.Errorf("quiet mode wrote progress: %q", stderr.String())
 	}
+
+	assertReportFiles(t, outputDir)
 }
 
 func TestRunWizardCancellationDoesNotScan(t *testing.T) {
@@ -196,5 +204,60 @@ func TestRunRequiresURLWithoutTerminal(t *testing.T) {
 
 	if !strings.Contains(stderr.String(), "target URL is required") {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestRunWritesReportsAndVerboseLogs(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	outputDir := t.TempDir()
+
+	code := run(
+		[]string{"-url", "https://example.com", "--out", outputDir, "--verbose"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		false,
+		func(cfg *config.Config) report.Report {
+			cfg.Logger.Printf("DEBUG test debug message")
+
+			return report.Report{
+				SchemaVersion: "v1",
+				Target:        cfg.Target,
+				StartedAt:     time.Unix(0, 0).UTC(),
+				Duration:      "1s",
+			}
+		},
+	)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, stderr.String())
+	}
+
+	assertReportFiles(t, outputDir)
+
+	logData, err := os.ReadFile(filepath.Join(outputDir, "scan.log"))
+	if err != nil {
+		t.Fatalf("read scan log: %v", err)
+	}
+
+	if !strings.Contains(string(logData), "DEBUG test debug message") {
+		t.Fatalf("scan log missing debug message:\n%s", logData)
+	}
+}
+
+func assertReportFiles(t *testing.T, outputDir string) {
+	t.Helper()
+
+	for _, name := range []string{"report.html", "report.md", "report.json", "scan.log"} {
+		info, err := os.Stat(filepath.Join(outputDir, name))
+		if err != nil {
+			t.Errorf("%s was not created: %v", name, err)
+			continue
+		}
+
+		if name != "scan.log" && info.Size() == 0 {
+			t.Errorf("%s is empty", name)
+		}
 	}
 }
