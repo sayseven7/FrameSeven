@@ -20,30 +20,45 @@ import (
 	"github.com/sayseven7/frameseven/internal/finding"
 	"github.com/sayseven7/frameseven/internal/report"
 	"github.com/sayseven7/frameseven/internal/tools/v1/access"
+	"github.com/sayseven7/frameseven/internal/tools/v1/bannergrab"
+	"github.com/sayseven7/frameseven/internal/tools/v1/content"
+	"github.com/sayseven7/frameseven/internal/tools/v1/crawler"
 	"github.com/sayseven7/frameseven/internal/tools/v1/lfi"
 	"github.com/sayseven7/frameseven/internal/tools/v1/misconfig"
+	"github.com/sayseven7/frameseven/internal/tools/v1/nmap"
+	"github.com/sayseven7/frameseven/internal/tools/v1/ports"
 	"github.com/sayseven7/frameseven/internal/tools/v1/ratelimit"
 	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 	"github.com/sayseven7/frameseven/internal/tools/v1/sqli"
+	"github.com/sayseven7/frameseven/internal/tools/v1/sqlmap"
 	"github.com/sayseven7/frameseven/internal/tools/v1/ssrf"
+	"github.com/sayseven7/frameseven/internal/tools/v1/subdomain"
 )
 
 // Module describes one scanner module exposed by Framework v1.
 type Module struct {
-	Name        string
-	Description string
+	Name             string
+	Description      string
+	EnabledByDefault bool
 }
 
 // Modules is the ordered Framework v1 scanner module catalog.
 var Modules = []Module{
-	{"recon", "DNS, technology, endpoint, parameter, and sensitive-file discovery"},
-	{"sqli", "SQL injection detection and data extraction"},
-	{"access", "Unauthenticated endpoint and IDOR checks"},
-	{"ssrf", "Internal service and cloud metadata SSRF checks"},
-	{"lfi", "Local file inclusion and path traversal checks"},
-	{"misconfig", "Security header, HTTP method, CORS, and TLS checks"},
-	{"ratelimit", "Request burst and rate-limit behavior checks"},
-	{"cve", "NVD CVE lookup for detected product versions"},
+	{"recon", "DNS, technology, endpoint, parameter, and sensitive-file discovery", true},
+	{"sqli", "SQL injection detection and data extraction", true},
+	{"access", "Unauthenticated endpoint, admin path, and IDOR checks", true},
+	{"ssrf", "Internal service and cloud metadata SSRF checks", true},
+	{"lfi", "Local file inclusion and path traversal checks", true},
+	{"misconfig", "Security header, HTTP method, CORS, and TLS checks", true},
+	{"ratelimit", "Request burst and rate-limit behavior checks", true},
+	{"cve", "NVD CVE lookup for detected product versions", true},
+	{"crawler", "Same-origin link and form discovery beyond the landing page", false},
+	{"content", "Common content and directory discovery", false},
+	{"subdomain", "Common DNS subdomain discovery", false},
+	{"ports", "Light TCP checks for common web-facing ports", false},
+	{"nmap", "Nmap integration availability check", false},
+	{"sqlmap", "sqlmap integration availability check", false},
+	{"bannergrab", "FTP, SSH, and SMTP service banner checks", false},
 }
 
 // Scan runs the full pipeline and returns a report.
@@ -134,6 +149,55 @@ func Scan(cfg *config.Config) report.Report {
 				return cve.Run(cfg, client, surface)
 			},
 		},
+		{
+			name:     "crawler",
+			activity: "crawling same-origin links discovered by recon",
+			run: func() []finding.Finding {
+				return crawler.Run(cfg, client, surface)
+			},
+		},
+		{
+			name:     "content",
+			activity: "checking common content paths",
+			run: func() []finding.Finding {
+				return content.Run(cfg, client)
+			},
+		},
+		{
+			name:     "subdomain",
+			activity: "resolving common subdomain candidates",
+			run: func() []finding.Finding {
+				return subdomain.Run(cfg)
+			},
+		},
+		{
+			name:     "ports",
+			activity: "checking common web-facing TCP ports",
+			run: func() []finding.Finding {
+				return ports.Run(cfg)
+			},
+		},
+		{
+			name:     "nmap",
+			activity: "checking Nmap integration availability",
+			run: func() []finding.Finding {
+				return nmap.Run()
+			},
+		},
+		{
+			name:     "sqlmap",
+			activity: "checking sqlmap integration availability",
+			run: func() []finding.Finding {
+				return sqlmap.Run()
+			},
+		},
+		{
+			name:     "bannergrab",
+			activity: "checking FTP, SSH, and SMTP service banners",
+			run: func() []finding.Finding {
+				return bannergrab.Run(cfg)
+			},
+		},
 	}
 
 	for _, step := range steps {
@@ -175,11 +239,23 @@ func ModuleNames() []string {
 	return names
 }
 
+// DefaultModuleNames returns every Framework v1 module enabled by default.
+func DefaultModuleNames() []string {
+	var names []string
+	for _, module := range Modules {
+		if module.EnabledByDefault {
+			names = append(names, module.Name)
+		}
+	}
+
+	return names
+}
+
 // NormalizeModules validates module names and includes required dependencies.
-// Empty input means every Framework v1 module is enabled.
+// Empty input means every default Framework v1 module is enabled.
 func NormalizeModules(names []string) ([]string, error) {
 	if len(names) == 0 {
-		return ModuleNames(), nil
+		return DefaultModuleNames(), nil
 	}
 
 	valid := map[string]bool{}
@@ -217,7 +293,7 @@ func includeRequiredModules(selected []string) []string {
 	needsRecon := false
 	for _, name := range selected {
 		switch name {
-		case "sqli", "access", "ssrf", "lfi", "cve":
+		case "sqli", "access", "ssrf", "lfi", "cve", "crawler":
 			needsRecon = true
 		}
 	}

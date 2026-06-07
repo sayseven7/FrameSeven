@@ -171,3 +171,27 @@ func TestNormalizeModulesAddsReconDependency(t *testing.T) {
 		t.Fatalf("modules = %v", got)
 	}
 }
+
+func TestNormalizeModulesDefaultsToCoreModules(t *testing.T) {
+	got, err := NormalizeModules(nil)
+	if err != nil {
+		t.Fatalf("NormalizeModules: %v", err)
+	}
+
+	want := "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve"
+	if strings.Join(got, ",") != want {
+		t.Fatalf("modules = %v", got)
+	}
+}
+
+func TestNormalizeModulesAllowsAllOfficialModules(t *testing.T) {
+	got, err := NormalizeModules(ModuleNames())
+	if err != nil {
+		t.Fatalf("NormalizeModules: %v", err)
+	}
+
+	want := "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve,crawler,content,subdomain,ports,nmap,sqlmap,bannergrab"
+	if strings.Join(got, ",") != want {
+		t.Fatalf("modules = %v", got)
+	}
+}

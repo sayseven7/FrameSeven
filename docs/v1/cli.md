@@ -33,8 +33,8 @@ For a development build that has not been installed:
 | `-yes`, `-y` | disabled | Skip the wizard's final confirmation |
 | `-quiet`, `-q` | disabled | Hide banner and progress messages |
 | `-verbose`, `-v` | disabled | Include HTTP request, response, duration, and error debug logs |
-| `-modules` | `all` | Comma-separated Framework v1 modules to run |
-| `-tools` | `all` | Alias for `-modules` |
+| `-modules` | `default` | Comma-separated Framework v1 modules to run, `default`, or `all` |
+| `-tools` | `default` | Alias for `-modules` |
 | `-version` | disabled | Print the installed build version |
 | `-list-modules` | disabled | List all Framework v1 scanner modules |
 
@@ -128,7 +128,11 @@ frameseven \
 ```
 
 When a selected tool needs the discovered attack surface (`sqli`, `access`,
-`ssrf`, `lfi`, or `cve`), CLI v1 includes `recon` automatically.
+`ssrf`, `lfi`, `cve`, or `crawler`), CLI v1 includes `recon` automatically.
+
+`default` runs the core web scanner modules. `all` also includes official opt-in
+enumeration and integration modules: `crawler`, `content`, `subdomain`,
+`ports`, `nmap`, `sqlmap`, and `bannergrab`.
 
 Print the installed version:
 

@@ -21,7 +21,7 @@ import (
 const bannerTitle = "frameseven CLI v1 - offensive web scanner"
 const defaultOutputDir = "reports"
 
-const legacyBanner = `
+const cliBanner = `
                  (` + "`" + `-').-> (` + "`" + `-')  _         _  (` + "`" + `-')
                  (OO )__  ( OO).-/  <-.    \-.(OO )
                 ,--. ,'-'(,------.,--. )   _.'    \
@@ -175,8 +175,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.BoolVar(&opts.listModules, "list-modules", false, "list scanner modules")
 
 	var moduleList string
-	flags.StringVar(&moduleList, "modules", "", "comma-separated scanner modules to run, or all")
-	flags.StringVar(&moduleList, "tools", "", "comma-separated scanner modules to run, or all")
+	flags.StringVar(&moduleList, "modules", "", "comma-separated scanner modules to run, default, or all")
+	flags.StringVar(&moduleList, "tools", "", "comma-separated scanner modules to run, default, or all")
 
 	flags.Usage = func() {
 		writeBanner(stderr)
@@ -289,7 +289,7 @@ func promptInt(reader *bufio.Reader, output io.Writer, label string, defaultValu
 }
 
 func promptModules(reader *bufio.Reader, output io.Writer, current []string) []string {
-	defaultValue := "all"
+	defaultValue := "default"
 	if len(current) > 0 {
 		defaultValue = strings.Join(current, ",")
 	}
@@ -320,13 +320,17 @@ func writeModules(output io.Writer) {
 }
 
 func writeBanner(output io.Writer) {
-	fmt.Fprint(output, legacyBanner)
+	fmt.Fprint(output, cliBanner)
 }
 
 func parseModuleList(value string) ([]string, error) {
 	value = strings.TrimSpace(value)
-	if value == "" || strings.EqualFold(value, "all") {
+	if value == "" || strings.EqualFold(value, "default") {
 		return scanner.NormalizeModules(nil)
+	}
+
+	if strings.EqualFold(value, "all") {
+		return scanner.NormalizeModules(scanner.ModuleNames())
 	}
 
 	byName := map[string]string{}

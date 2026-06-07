@@ -52,7 +52,23 @@ func TestRunListsModules(t *testing.T) {
 		t.Fatalf("exit code = %d", code)
 	}
 
-	for _, name := range []string{"recon", "sqli", "access", "ssrf", "lfi", "misconfig", "ratelimit", "cve"} {
+	for _, name := range []string{
+		"recon",
+		"sqli",
+		"access",
+		"ssrf",
+		"lfi",
+		"misconfig",
+		"ratelimit",
+		"cve",
+		"crawler",
+		"content",
+		"subdomain",
+		"ports",
+		"nmap",
+		"sqlmap",
+		"bannergrab",
+	} {
 		if !strings.Contains(stdout.String(), name) {
 			t.Errorf("module %q missing from output", name)
 		}
@@ -227,6 +243,35 @@ func TestRunAcceptsModuleFlag(t *testing.T) {
 	}
 
 	if strings.Join(received.SelectedModules, ",") != "recon,sqli,misconfig" {
+		t.Errorf("selected modules = %v", received.SelectedModules)
+	}
+}
+
+func TestRunAcceptsAllModules(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	var received config.Config
+	outputDir := t.TempDir()
+
+	code := run(
+		[]string{"-url", "https://example.com", "--out", outputDir, "--modules", "all", "--quiet"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		false,
+		func(cfg *config.Config) report.Report {
+			received = *cfg
+
+			return report.Report{}
+		},
+	)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, stderr.String())
+	}
+
+	want := "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve,crawler,content,subdomain,ports,nmap,sqlmap,bannergrab"
+	if strings.Join(received.SelectedModules, ",") != want {
 		t.Errorf("selected modules = %v", received.SelectedModules)
 	}
 }

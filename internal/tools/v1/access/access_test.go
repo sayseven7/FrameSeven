@@ -70,6 +70,31 @@ func TestRunUnauthAndIDOR(t *testing.T) {
 	}
 }
 
+func TestRunReportsProtectedAdminCandidate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/admin" {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+
+	findings := Run(&cfg, srv.Client(), recon.Surface{})
+
+	for _, f := range findings {
+		if f.Title == "Administrative interface candidate discovered: /admin" {
+			return
+		}
+	}
+
+	t.Errorf("expected protected admin candidate finding, got %+v", findings)
+}
+
 func TestRunNoIDORForNonNumeric(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)

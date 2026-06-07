@@ -30,6 +30,8 @@ var adminPaths = []string{
 	"/console",
 	"/config",
 	"/metrics",
+	"/cpanel",
+	"/wp-admin/",
 }
 
 type response struct {
@@ -63,28 +65,49 @@ func unauthEndpoints(cfg *config.Config, client *http.Client, base *url.URL) []f
 		}
 
 		resp := get(cfg, client, ref.String())
-		if resp == nil || resp.status != http.StatusOK {
+		if resp == nil {
 			continue
 		}
 
-		findings = append(findings, finding.Finding{
-			Title:       "Sensitive endpoint reachable without authentication: " + path,
-			Module:      "access",
-			Severity:    finding.High,
-			OWASP:       "A01:2025 - Broken Access Control",
-			CWE:         "CWE-284",
-			CVSS:        7.5,
-			Description: "An administrative or internal endpoint returned 200 without any authentication.",
-			Evidence: finding.Evidence{
-				Request:   resp.dump,
-				Response:  trim(resp.body, 400),
-				Extracted: path,
-			},
-			NextSteps: []string{
-				"Require authentication and authorization on this endpoint.",
-				"Verify access checks are enforced server-side, not only in the UI.",
-			},
-		})
+		switch resp.status {
+		case http.StatusOK:
+			findings = append(findings, finding.Finding{
+				Title:       "Sensitive endpoint reachable without authentication: " + path,
+				Module:      "access",
+				Severity:    finding.High,
+				OWASP:       "A01:2025 - Broken Access Control",
+				CWE:         "CWE-284",
+				CVSS:        7.5,
+				Description: "An administrative or internal endpoint returned 200 without any authentication.",
+				Evidence: finding.Evidence{
+					Request:   resp.dump,
+					Response:  trim(resp.body, 400),
+					Extracted: path,
+				},
+				NextSteps: []string{
+					"Require authentication and authorization on this endpoint.",
+					"Verify access checks are enforced server-side, not only in the UI.",
+				},
+			})
+		case http.StatusUnauthorized, http.StatusForbidden:
+			findings = append(findings, finding.Finding{
+				Title:       "Administrative interface candidate discovered: " + path,
+				Module:      "access",
+				Severity:    finding.Info,
+				OWASP:       "A01:2025 - Broken Access Control",
+				CWE:         "CWE-200",
+				Description: "An administrative path exists and returned an authentication or authorization response.",
+				Evidence: finding.Evidence{
+					Request:   resp.dump,
+					Response:  trim(resp.body, 400),
+					Extracted: path + " (" + strconv.Itoa(resp.status) + ")",
+				},
+				NextSteps: []string{
+					"Confirm this interface is intentionally exposed.",
+					"Keep authorization checks server-side and monitor access attempts.",
+				},
+			})
+		}
 	}
 
 	return findings

@@ -57,7 +57,7 @@ NVD_API_KEY=your-key frameseven -url https://target.example
 
 ## Framework v1 Scan Pipeline
 
-Framework v1 runs selected modules in this order. By default, every module is selected:
+Framework v1 runs selected modules in this order. The first eight modules are selected by default. The remaining official modules run when selected explicitly or through `-modules all`:
 
 1. `recon`: resolves DNS, fingerprints technologies, discovers endpoints and
    parameters, and probes known sensitive paths.
@@ -72,6 +72,13 @@ Framework v1 runs selected modules in this order. By default, every module is se
 6. `misconfig`: checks headers, HTTP methods, CORS, and TLS configuration.
 7. `ratelimit`: sends a request burst and observes status and latency changes.
 8. `cve`: looks up CVEs for technologies with detected versions.
+9. `crawler`: visits known same-origin endpoints and extracts additional links.
+10. `content`: checks a small seed list of common content paths.
+11. `subdomain`: resolves common subdomain candidates.
+12. `ports`: checks common web-facing TCP ports.
+13. `nmap`: records Nmap integration availability.
+14. `sqlmap`: records sqlmap integration availability.
+15. `bannergrab`: checks lightweight FTP, SSH, and SMTP service banners.
 
 ## Safety Notice
 
