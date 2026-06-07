@@ -53,7 +53,9 @@ func writeFile(path string, write func(*os.File) error) error {
 	}
 
 	if err := write(file); err != nil {
-		file.Close()
+		if closeErr := file.Close(); closeErr != nil {
+			return fmt.Errorf("write %s: %w; close file: %v", path, err, closeErr)
+		}
 
 		return fmt.Errorf("write %s: %w", path, err)
 	}
