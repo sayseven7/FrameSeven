@@ -22,7 +22,7 @@ func TestPortsForDeduplicates(t *testing.T) {
 	findings := Run(&cfg, nil, nil)
 
 	// Should not error on deduplication of port 443
-	if findings != nil && len(findings) > 1 {
+	if len(findings) > 1 {
 		t.Logf("ports returned %d finding(s)", len(findings))
 	}
 }
