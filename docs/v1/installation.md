@@ -10,9 +10,9 @@ or build the project from source for development.
 
 Each release provides:
 
-- Linux binaries for `amd64` and `arm64`
-- macOS binaries for `amd64` and `arm64`
-- A Windows binary for `amd64`
+- CLI and MCP Linux binaries for `amd64` and `arm64`
+- CLI and MCP macOS binaries for `amd64` and `arm64`
+- CLI and MCP Windows binaries for `amd64`
 - Debian packages for `amd64` and `arm64`
 - RPM packages for `amd64` and `arm64`
 - Arch Linux packages for `amd64` and `arm64`
@@ -24,8 +24,11 @@ leading `v`.
 Release assets follow this naming convention:
 
 ```text
-frameseven_<version>_<os>_<arch>.<format>
+frameseven_<component>_<version>_<os>_<arch>.<format>
 ```
+
+The component is `cli` or `mcp`. Linux packages currently install the CLI
+binary and therefore use the `cli` component.
 
 The public operating system names are `linux`, `macos`, and `windows`.
 
@@ -44,7 +47,7 @@ Download the `.deb` file for your architecture from the
 it:
 
 ```bash
-sudo apt install ./frameseven_<version>_linux_amd64.deb
+sudo apt install ./frameseven_cli_<version>_linux_amd64.deb
 ```
 
 Use the `arm64` package instead when running a 64-bit ARM system.
@@ -61,7 +64,7 @@ Download the `.rpm` file for your architecture from the release page, then
 install it:
 
 ```bash
-sudo dnf install ./frameseven_<version>_linux_amd64.rpm
+sudo dnf install ./frameseven_cli_<version>_linux_amd64.rpm
 ```
 
 Use the `arm64` package instead when running a 64-bit ARM system.
@@ -72,7 +75,7 @@ Download the `.pkg.tar.zst` file for your architecture from the release page,
 then install it:
 
 ```bash
-sudo pacman -U ./frameseven_<version>_linux_amd64.pkg.tar.zst
+sudo pacman -U ./frameseven_cli_<version>_linux_amd64.pkg.tar.zst
 ```
 
 Use the `arm64` package instead when running a 64-bit ARM system.
@@ -83,16 +86,25 @@ Download the archive for your operating system and architecture, extract it,
 and install the binary in a directory included in `PATH`:
 
 ```bash
-tar -xzf frameseven_<version>_linux_amd64.tar.gz
+tar -xzf frameseven_cli_<version>_linux_amd64.tar.gz
 sudo install -m 0755 \
-  frameseven_<version>_linux_amd64/frameseven \
+  frameseven_cli_<version>_linux_amd64/frameseven-cli \
   /usr/local/bin/frameseven
+```
+
+For the MCP server, download the `mcp` archive instead:
+
+```bash
+tar -xzf frameseven_mcp_<version>_linux_amd64.tar.gz
+sudo install -m 0755 \
+  frameseven_mcp_<version>_linux_amd64/frameseven-mcp \
+  /usr/local/bin/frameseven-mcp
 ```
 
 ## Windows Archive
 
 Download and extract the Windows `.zip` file from the release page. Add the
-directory containing `frameseven.exe` to `PATH`.
+directory containing `frameseven-cli.exe` or `frameseven-mcp.exe` to `PATH`.
 
 ## Verify a Download
 
@@ -109,12 +121,19 @@ git clone https://github.com/sayseven7/frameseven.git
 cd frameseven
 go test ./...
 go build -o bin/frameseven/cli/v1 cmd/cli/v1/main.go
+go build -o bin/frameseven/mcp cmd/mcp/main.go
 ```
 
 Run the built command:
 
 ```bash
 ./bin/frameseven/cli/v1 -url https://target.example
+```
+
+Run the MCP server over stdin/stdout:
+
+```bash
+./bin/frameseven/mcp
 ```
 
 ## Install a Development Build

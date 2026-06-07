@@ -32,7 +32,8 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: Validate release tag
         shell: bash
@@ -109,7 +110,8 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: Install Linux packaging tools
         if: matrix.goos == 'linux'
@@ -117,7 +119,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y rpm zstd
 
-      - name: Build binary
+      - name: Build binaries
         shell: bash
         env:
           GOOS: ${{ matrix.goos }}
@@ -130,8 +132,14 @@ jobs:
           CGO_ENABLED=0 go build \
             -trimpath \
             -ldflags="-s -w -X main.buildVersion=$version" \
-            -o "build/frameseven${EXTENSION}" \
+            -o "build/frameseven-cli${EXTENSION}" \
             ./cmd/cli/v1
+
+          CGO_ENABLED=0 go build \
+            -trimpath \
+            -ldflags="-s -w" \
+            -o "build/frameseven-mcp${EXTENSION}" \
+            ./cmd/mcp
 
       - name: Create release archive
         shell: bash
@@ -139,23 +147,28 @@ jobs:
           ARTIFACT_OS: ${{ matrix.artifact_os }}
           GOARCH: ${{ matrix.goarch }}
           ARCHIVE: ${{ matrix.archive }}
+          EXTENSION: ${{ matrix.extension }}
         run: |
           version="${RELEASE_TAG#v}"
-          package="frameseven_${version}_${ARTIFACT_OS}_${GOARCH}"
+          cli_package="frameseven_cli_${version}_${ARTIFACT_OS}_${GOARCH}"
+          mcp_package="frameseven_mcp_${version}_${ARTIFACT_OS}_${GOARCH}"
 
-          mkdir -p "dist/$package"
-          cp build/frameseven* README.md LICENSE "dist/$package/"
+          mkdir -p "dist/$cli_package" "dist/$mcp_package"
+          cp "build/frameseven-cli${EXTENSION}" README.md LICENSE "dist/$cli_package/"
+          cp "build/frameseven-mcp${EXTENSION}" README.md LICENSE "dist/$mcp_package/"
 
           if [ "$ARCHIVE" = "zip" ]; then
             (
               cd dist
-              zip -qr "${package}.zip" "$package"
+              zip -qr "${cli_package}.zip" "$cli_package"
+              zip -qr "${mcp_package}.zip" "$mcp_package"
             )
           else
-            tar -C dist -czf "dist/${package}.tar.gz" "$package"
+            tar -C dist -czf "dist/${cli_package}.tar.gz" "$cli_package"
+            tar -C dist -czf "dist/${mcp_package}.tar.gz" "$mcp_package"
           fi
 
-          rm -rf "dist/$package"
+          rm -rf "dist/$cli_package" "dist/$mcp_package"
 
       - name: Create Debian package
         if: matrix.goos == 'linux'
@@ -165,14 +178,14 @@ jobs:
         run: |
           version="${RELEASE_TAG#v}"
           package_root="deb/frameseven"
-          package_file="frameseven_${version}_linux_${DEB_ARCH}.deb"
+          package_file="frameseven_cli_${version}_linux_${DEB_ARCH}.deb"
 
           mkdir -p \
             "$package_root/DEBIAN" \
             "$package_root/usr/bin" \
             "$package_root/usr/share/doc/frameseven"
 
-          install -m 0755 build/frameseven "$package_root/usr/bin/frameseven"
+          install -m 0755 build/frameseven-cli "$package_root/usr/bin/frameseven"
           install -m 0644 README.md "$package_root/usr/share/doc/frameseven/README.md"
           install -m 0644 LICENSE "$package_root/usr/share/doc/frameseven/copyright"
 
@@ -203,7 +216,7 @@ jobs:
         run: |
           version="${RELEASE_TAG#v}"
           package_version="${version//-/_}"
-          package_file="frameseven_${version}_linux_${GOARCH}.rpm"
+          package_file="frameseven_cli_${version}_linux_${GOARCH}.rpm"
           rpm_root="$PWD/rpm"
 
           mkdir -p \
@@ -214,7 +227,7 @@ jobs:
             "$rpm_root/SPECS" \
             "$rpm_root/SRPMS"
 
-          install -m 0755 build/frameseven "$rpm_root/SOURCES/frameseven"
+          install -m 0755 build/frameseven-cli "$rpm_root/SOURCES/frameseven"
           install -m 0644 README.md "$rpm_root/SOURCES/README.md"
           install -m 0644 LICENSE "$rpm_root/SOURCES/LICENSE"
 
@@ -272,13 +285,13 @@ jobs:
           version="${RELEASE_TAG#v}"
           package_version="${version//-/_}"
           package_root="$PWD/arch/frameseven"
-          package_file="frameseven_${version}_linux_${GOARCH}.pkg.tar.zst"
+          package_file="frameseven_cli_${version}_linux_${GOARCH}.pkg.tar.zst"
 
           mkdir -p \
             "$package_root/usr/bin" \
             "$package_root/usr/share/doc/frameseven"
 
-          install -m 0755 build/frameseven "$package_root/usr/bin/frameseven"
+          install -m 0755 build/frameseven-cli "$package_root/usr/bin/frameseven"
           install -m 0644 README.md "$package_root/usr/share/doc/frameseven/README.md"
           install -m 0644 LICENSE "$package_root/usr/share/doc/frameseven/LICENSE"
 

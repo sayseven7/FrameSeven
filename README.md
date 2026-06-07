@@ -27,5 +27,6 @@ go run cmd/cli/v1/main.go -url https://target.example
 - [Documentation](docs/README.md)
 - [Installation v1](docs/v1/installation.md)
 - [CLI v1](docs/v1/cli.md)
+- [MCP Server](docs/v1/mcp.md)
 - [Report Format v1](docs/v1/report-format.md)
 - [Contributing](CONTRIBUTING.md)

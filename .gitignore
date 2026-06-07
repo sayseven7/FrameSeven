@@ -1,7 +1,6 @@
 # Go
 go.work
 go.work.sum
-go.sum
 *.exe
 *.exe~
 *.dll
