@@ -39,6 +39,7 @@ run: `go run cmd/cli/main.go`
 build: `go build -o bin/frameseven/cli cmd/cli/main.go`
 test: `go test -v ./...`
 fmt: `go fmt ./...`
+vet: `go vet ./...`
 
 ## Code Style
 
