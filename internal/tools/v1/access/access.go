@@ -57,6 +57,7 @@ func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []find
 
 func unauthEndpoints(cfg *config.Config, client *http.Client, base *url.URL) []finding.Finding {
 	var findings []finding.Finding
+	reported := map[string]bool{}
 
 	for _, path := range adminPaths {
 		ref, err := base.Parse(path)
@@ -64,10 +65,17 @@ func unauthEndpoints(cfg *config.Config, client *http.Client, base *url.URL) []f
 			continue
 		}
 
+		normalized := strings.TrimRight(path, "/")
+		if reported[normalized] {
+			continue
+		}
+
 		resp := get(cfg, client, ref.String())
 		if resp == nil {
 			continue
 		}
+
+		reported[normalized] = true
 
 		switch resp.status {
 		case http.StatusOK:

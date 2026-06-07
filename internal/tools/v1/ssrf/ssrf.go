@@ -40,6 +40,7 @@ type response struct {
 func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
 	var findings []finding.Finding
 	tested := map[string]bool{}
+	matchedAny := false
 
 	for _, p := range surface.Params {
 		if !paramHint.MatchString(p.Name) {
@@ -57,8 +58,20 @@ func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []find
 		}
 
 		tested[key] = true
+		matchedAny = true
 
 		findings = append(findings, testParam(cfg, client, p)...)
+	}
+
+	if !matchedAny {
+		findings = append(findings, finding.Finding{
+			Title:       "No URL-like parameters discovered for SSRF testing",
+			Module:      "ssrf",
+			Severity:    finding.Info,
+			OWASP:       "A10:2025 - Server-Side Request Forgery",
+			Description: "None of the discovered parameters matched the URL/redirect hint pattern. SSRF probes were skipped.",
+			NextSteps:   []string{"Manually inspect the application for parameters that accept URLs or redirect targets."},
+		})
 	}
 
 	return findings

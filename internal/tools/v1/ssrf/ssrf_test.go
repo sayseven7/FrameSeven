@@ -75,7 +75,22 @@ func TestRunSkipsNonURLParam(t *testing.T) {
 		},
 	}
 
-	if findings := Run(&cfg, srv.Client(), &surface); len(findings) != 0 {
-		t.Errorf("expected no findings for non-URL parameter, got %+v", findings)
+	findings := Run(&cfg, srv.Client(), &surface)
+
+	var hasInfo bool
+	for _, f := range findings {
+		if f.Title == "No URL-like parameters discovered for SSRF testing" {
+			hasInfo = true
+		}
+	}
+
+	if !hasInfo {
+		t.Errorf("expected info finding, got %+v", findings)
+	}
+
+	for _, f := range findings {
+		if f.CWE == "CWE-918" {
+			t.Errorf("did not expect SSRF finding for non-URL parameter, got %+v", f)
+		}
 	}
 }

@@ -71,6 +71,10 @@ func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []find
 	var findings []finding.Finding
 	seen := map[string]bool{}
 
+	if cfg.NVDAPIKey == "" {
+		cfg.Logger.Printf("no NVD API key set — CVE lookups use unauthenticated rate limits")
+	}
+
 	for _, tech := range surface.Technologies {
 		keyword := versionKeyword(tech)
 		if keyword == "" {
@@ -79,11 +83,27 @@ func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []find
 
 		cpeName, ok := resolveCPE(cfg, client, tech)
 		if !ok {
+			findings = append(findings, finding.Finding{
+				Title:       "No CPE match found for " + tech.Name + " " + tech.Version,
+				Module:      "cve",
+				Severity:    finding.Info,
+				OWASP:       "A06:2025 - Vulnerable and Outdated Components",
+				Description: "The NVD CPE database returned no unique match for " + keyword + ". No CVEs could be looked up for this component.",
+				NextSteps:   []string{"Verify the version string and check NVD directly for related CVEs."},
+			})
 			continue
 		}
 
 		data, ok := lookup(cfg, client, cpeName)
 		if !ok {
+			findings = append(findings, finding.Finding{
+				Title:       "CVE lookup failed for " + keyword,
+				Module:      "cve",
+				Severity:    finding.Info,
+				OWASP:       "A06:2025 - Vulnerable and Outdated Components",
+				Description: "The NVD API did not return CVE data for " + cpeName + ". This can happen when the API is unreachable or rate-limited.",
+				NextSteps:   []string{"Check NVD network access and consider setting an NVD API key to raise rate limits."},
+			})
 			continue
 		}
 
