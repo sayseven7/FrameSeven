@@ -170,13 +170,15 @@ jobs:
 
           rm -rf "dist/$cli_package" "dist/$mcp_package"
 
-      - name: Create Debian package
+      - name: Create Debian packages
         if: matrix.goos == 'linux'
         shell: bash
         env:
           DEB_ARCH: ${{ matrix.deb_arch }}
         run: |
           version="${RELEASE_TAG#v}"
+
+          # CLI package
           package_root="deb/frameseven"
           package_file="frameseven_cli_${version}_linux_${DEB_ARCH}.deb"
 
@@ -207,7 +209,38 @@ jobs:
           dpkg-deb --build --root-owner-group "$package_root" "dist/$package_file"
           dpkg-deb --info "dist/$package_file"
 
-      - name: Create RPM package
+          # MCP package
+          mcp_root="deb/frameseven-mcp"
+          mcp_file="frameseven_mcp_${version}_linux_${DEB_ARCH}.deb"
+
+          mkdir -p \
+            "$mcp_root/DEBIAN" \
+            "$mcp_root/usr/bin" \
+            "$mcp_root/usr/share/doc/frameseven-mcp"
+
+          install -m 0755 build/frameseven-mcp "$mcp_root/usr/bin/frameseven-mcp"
+          install -m 0644 README.md "$mcp_root/usr/share/doc/frameseven-mcp/README.md"
+          install -m 0644 LICENSE "$mcp_root/usr/share/doc/frameseven-mcp/copyright"
+
+          mcp_installed_size="$(du -sk "$mcp_root/usr" | cut -f1)"
+
+          cat > "$mcp_root/DEBIAN/control" <<EOF
+          Package: frameseven-mcp
+          Version: $version
+          Section: utils
+          Priority: optional
+          Architecture: $DEB_ARCH
+          Installed-Size: $mcp_installed_size
+          Maintainer: Frame Seven Project <sayseven7@users.noreply.github.com>
+          Homepage: https://github.com/sayseven7/frameseven
+          Description: Offensive web security scanner - MCP server
+           MCP server for authorized web security testing.
+          EOF
+
+          dpkg-deb --build --root-owner-group "$mcp_root" "dist/$mcp_file"
+          dpkg-deb --info "dist/$mcp_file"
+
+      - name: Create RPM packages
         if: matrix.goos == 'linux'
         shell: bash
         env:
@@ -216,6 +249,8 @@ jobs:
         run: |
           version="${RELEASE_TAG#v}"
           package_version="${version//-/_}"
+
+          # CLI package
           package_file="frameseven_cli_${version}_linux_${GOARCH}.rpm"
           rpm_root="$PWD/rpm"
 
@@ -275,7 +310,67 @@ jobs:
           rpm -qip "$rpm_file"
           cp "$rpm_file" "dist/$package_file"
 
-      - name: Create Arch Linux package
+          # MCP package
+          mcp_package_file="frameseven_mcp_${version}_linux_${GOARCH}.rpm"
+          mcp_rpm_root="$PWD/rpm-mcp"
+
+          mkdir -p \
+            "$mcp_rpm_root/BUILD" \
+            "$mcp_rpm_root/BUILDROOT" \
+            "$mcp_rpm_root/RPMS" \
+            "$mcp_rpm_root/SOURCES" \
+            "$mcp_rpm_root/SPECS" \
+            "$mcp_rpm_root/SRPMS"
+
+          install -m 0755 build/frameseven-mcp "$mcp_rpm_root/SOURCES/frameseven-mcp"
+          install -m 0644 README.md "$mcp_rpm_root/SOURCES/README.md"
+          install -m 0644 LICENSE "$mcp_rpm_root/SOURCES/LICENSE"
+
+          cat > "$mcp_rpm_root/SPECS/frameseven-mcp.spec" <<EOF
+          Name: frameseven-mcp
+          Version: $package_version
+          Release: 1
+          Summary: Offensive web security scanner - MCP server
+          License: MIT
+          URL: https://github.com/sayseven7/frameseven
+          Source0: frameseven-mcp
+          Source1: README.md
+          Source2: LICENSE
+
+          %description
+          MCP server for authorized web security testing.
+
+          %install
+          mkdir -p %{buildroot}/usr/bin
+          mkdir -p %{buildroot}/usr/share/doc/frameseven-mcp
+          install -m 0755 %{SOURCE0} %{buildroot}/usr/bin/frameseven-mcp
+          install -m 0644 %{SOURCE1} %{buildroot}/usr/share/doc/frameseven-mcp/README.md
+          install -m 0644 %{SOURCE2} %{buildroot}/usr/share/doc/frameseven-mcp/LICENSE
+
+          %files
+          /usr/bin/frameseven-mcp
+          /usr/share/doc/frameseven-mcp/README.md
+          /usr/share/doc/frameseven-mcp/LICENSE
+          EOF
+
+          rpmbuild \
+            -bb \
+            --target "$RPM_ARCH" \
+            --define "_topdir $mcp_rpm_root" \
+            --define "debug_package %{nil}" \
+            "$mcp_rpm_root/SPECS/frameseven-mcp.spec"
+
+          mcp_rpm_file="$(find "$mcp_rpm_root/RPMS" -type f -name '*.rpm' -print -quit)"
+
+          if [ -z "$mcp_rpm_file" ]; then
+            echo "MCP RPM package was not created."
+            exit 1
+          fi
+
+          rpm -qip "$mcp_rpm_file"
+          cp "$mcp_rpm_file" "dist/$mcp_package_file"
+
+      - name: Create Arch Linux packages
         if: matrix.goos == 'linux'
         shell: bash
         env:
@@ -284,6 +379,8 @@ jobs:
         run: |
           version="${RELEASE_TAG#v}"
           package_version="${version//-/_}"
+
+          # CLI package
           package_root="$PWD/arch/frameseven"
           package_file="frameseven_cli_${version}_linux_${GOARCH}.pkg.tar.zst"
 
@@ -323,6 +420,47 @@ jobs:
             usr
 
           tar --zstd -tf "dist/$package_file"
+
+          # MCP package
+          mcp_root="$PWD/arch/frameseven-mcp"
+          mcp_file="frameseven_mcp_${version}_linux_${GOARCH}.pkg.tar.zst"
+
+          mkdir -p \
+            "$mcp_root/usr/bin" \
+            "$mcp_root/usr/share/doc/frameseven-mcp"
+
+          install -m 0755 build/frameseven-mcp "$mcp_root/usr/bin/frameseven-mcp"
+          install -m 0644 README.md "$mcp_root/usr/share/doc/frameseven-mcp/README.md"
+          install -m 0644 LICENSE "$mcp_root/usr/share/doc/frameseven-mcp/LICENSE"
+
+          mcp_size="$(du -sb "$mcp_root/usr" | cut -f1)"
+
+          cat > "$mcp_root/.PKGINFO" <<EOF
+          pkgname = frameseven-mcp
+          pkgbase = frameseven-mcp
+          pkgver = ${package_version}-1
+          pkgdesc = Offensive web security scanner - MCP server
+          url = https://github.com/sayseven7/frameseven
+          builddate = $(date +%s)
+          packager = Frame Seven Project
+          size = $mcp_size
+          arch = $ARCH_ARCH
+          license = MIT
+          EOF
+
+          find "$mcp_root" -type d -exec chmod 0755 {} +
+          chmod 0644 "$mcp_root/.PKGINFO"
+
+          tar \
+            --zstd \
+            --owner=0 \
+            --group=0 \
+            -cf "dist/$mcp_file" \
+            -C "$mcp_root" \
+            .PKGINFO \
+            usr
+
+          tar --zstd -tf "dist/$mcp_file"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
