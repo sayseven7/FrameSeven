@@ -8,23 +8,16 @@ Keep changes simple, local, readable, and aligned with the current project.
 
 ## Rules
 
-- Always prefer simple and explicit code.
 - Avoid overengineering.
 - Avoid unnecessary abstractions.
 - Avoid generic systems unless clearly necessary.
 - Prefer duplication over premature abstraction.
-- Keep files small and focused.
-- Keep functions straightforward.
-- Prefer readability over cleverness.
 - Only implement what was requested.
-- Avoid unnecessary comments.
 - Avoid excessive folder nesting.
 - If something feels too complex, simplify it.
 - Do not change unrelated code.
 - Do not create architecture patterns without clear need.
 - Prefer existing project conventions over introducing new ones.
-- Avoid inline code like `if something return;`, always prefer block code like `if something { return }`.
-- Avoid lines of code that are too close together, as this makes them difficult to read. Add space between some lines occasionally to improve readability.
 
 ---
 
@@ -39,10 +32,16 @@ fmt: `go fmt ./...`
 
 ## Code Style
 
-- Prefer simple local code.
+- Always prefer simple and explicit code.
+- Keep files small and focused.
+- Keep functions straightforward.
+- Prefer readability over cleverness.
+- Avoid unnecessary comments.
 - Create abstractions only when there is a real need.
 - Avoid generic managers, premature factories, unnecessary interfaces, deep inheritance, and clever code.
 - Use explicit block control flow.
+- Avoid inline code like `if something return;`, always prefer block code like `if something { return }`.
+- Avoid lines of code that are too close together, as this makes them difficult to read. Add space between some lines occasionally to improve readability.
 
 Prefer:
 
