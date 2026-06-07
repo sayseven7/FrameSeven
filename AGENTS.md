@@ -18,6 +18,16 @@ Keep changes simple, local, readable, and aligned with the current project.
 - Do not change unrelated code.
 - Do not create architecture patterns without clear need.
 - Prefer existing project conventions over introducing new ones.
+- The project will use Go, but if by chance there is a better implementation, for example in Python, implement it following this architecture:
+
+│   └── tools
+│       └── example
+│           ├── example.go
+│           ├── example.py
+│           ├── example_test.go
+│           └── example_test.py
+
+And use Go as a wrapper to call this function.
 
 ---
 
