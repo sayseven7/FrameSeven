@@ -25,6 +25,32 @@ func TestNewDefaults(t *testing.T) {
 	}
 }
 
+func TestNormalizeTarget(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"https://example.com", "https://example.com"},
+		{"https://example.com/", "https://example.com"},
+		{"http://example.com/admin/", "http://example.com/admin"},
+		{"http://Example.COM/Path/", "http://example.com/Path"},
+		{"HTTP://EXAMPLE.COM", "http://example.com"},
+		{"https://example.com/path/to/page", "https://example.com/path/to/page"},
+		{"http://example.com/path?a=1&b=2", "http://example.com/path?a=1&b=2"},
+		{"", ""},
+		{"not-a-url", "not-a-url"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.input, func(t *testing.T) {
+			got := normalizeTarget(c.input)
+			if got != c.want {
+				t.Errorf("normalizeTarget(%q) = %q, want %q", c.input, got, c.want)
+			}
+		})
+	}
+}
+
 func TestValidate(t *testing.T) {
 	cases := []struct {
 		name    string

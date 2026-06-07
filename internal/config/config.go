@@ -45,7 +45,11 @@ const (
 )
 
 // New returns a Config with defaults applied for the given target.
+// The target URL is normalized: scheme and host are lowercased, and any
+// trailing slash is removed from the path.
 func New(target string) Config {
+	target = normalizeTarget(target)
+
 	return Config{
 		Target:       target,
 		Timeout:      DefaultTimeout,
@@ -53,6 +57,31 @@ func New(target string) Config {
 		RateRequests: DefaultRateRequests,
 		Logger:       log.New(io.Discard, "", log.Ltime),
 	}
+}
+
+func normalizeTarget(target string) string {
+	u, err := url.Parse(target)
+	if err != nil {
+		return target
+	}
+
+	if u.Scheme != "" {
+		u.Scheme = strings.ToLower(u.Scheme)
+	}
+
+	u.Host = strings.ToLower(u.Host)
+
+	path := strings.TrimRight(u.Path, "/")
+	if path != u.Path {
+		u.Path = path
+	}
+
+	normalized := u.String()
+	if normalized != target {
+		return normalized
+	}
+
+	return target
 }
 
 // Validate checks that the target is a usable absolute HTTP(S) URL and that
