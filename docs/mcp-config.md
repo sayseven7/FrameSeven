@@ -36,8 +36,7 @@ npx @modelcontextprotocol/inspector \
 Or point it to a running HTTP server:
 
 ```bash
-npx @modelcontextprotocol/inspector \
-  -e MCP_URL=http://127.0.0.1:8080/mcp
+npx @modelcontextprotocol/inspector
 ```
 
 The Inspector opens a local web interface where you can browse available tools,
