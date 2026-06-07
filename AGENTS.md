@@ -105,3 +105,12 @@ if not target: return None
 ```
 
 - Use blank lines to separate logical steps, not every line.
+
+---
+
+## Testing Targets
+
+Intentionally vulnerable sites that can be used as a base to test the tool:
+
+- http://testaspnet.vulnweb.com/ (Acunetix demo, ASP.NET / MSSQL)
+- https://preview.owasp-juice.shop/ (OWASP Juice Shop)
