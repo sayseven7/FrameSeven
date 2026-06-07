@@ -1,3 +1,5 @@
+## Prompt Suggestions for MCP usage with AI Agents
+
 Execute the requested action using MCP.
 
 If any required functionality does not exist or the current implementation is inadequate, you must:
