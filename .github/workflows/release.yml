@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.+~]+)?$ ]]; then
+            echo "Release tags must use vX.Y.Z or a valid prerelease suffix."
+            exit 1
+          fi
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l $(find . -type f -name '*.go'))"
+
+          if [ -n "$unformatted" ]; then
+            echo "The following Go files are not formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Test with race detector
+        run: go test -race ./...
+
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    needs:
+      - quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            archive: tar.gz
+            deb_arch: amd64
+          - goos: linux
+            goarch: arm64
+            archive: tar.gz
+            deb_arch: arm64
+          - goos: darwin
+            goarch: amd64
+            archive: tar.gz
+          - goos: darwin
+            goarch: arm64
+            archive: tar.gz
+          - goos: windows
+            goarch: amd64
+            archive: zip
+            extension: .exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build binary
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          EXTENSION: ${{ matrix.extension }}
+        run: |
+          mkdir -p build
+
+          CGO_ENABLED=0 go build \
+            -trimpath \
+            -ldflags="-s -w" \
+            -o "build/frameseven${EXTENSION}" \
+            ./cmd/cli/v1
+
+      - name: Create release archive
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          package="frameseven_${version}_${GOOS}_${GOARCH}"
+
+          mkdir -p "dist/$package"
+          cp build/frameseven* README.md LICENSE "dist/$package/"
+
+          if [ "$ARCHIVE" = "zip" ]; then
+            (
+              cd dist
+              zip -qr "${package}.zip" "$package"
+            )
+          else
+            tar -C dist -czf "dist/${package}.tar.gz" "$package"
+          fi
+
+          rm -rf "dist/$package"
+
+      - name: Create Debian package
+        if: matrix.goos == 'linux'
+        shell: bash
+        env:
+          DEB_ARCH: ${{ matrix.deb_arch }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          package_root="deb/frameseven"
+          package_file="frameseven_${version}_${DEB_ARCH}.deb"
+
+          mkdir -p \
+            "$package_root/DEBIAN" \
+            "$package_root/usr/bin" \
+            "$package_root/usr/share/doc/frameseven"
+
+          install -m 0755 build/frameseven "$package_root/usr/bin/frameseven"
+          install -m 0644 README.md "$package_root/usr/share/doc/frameseven/README.md"
+          install -m 0644 LICENSE "$package_root/usr/share/doc/frameseven/copyright"
+
+          installed_size="$(du -sk "$package_root/usr" | cut -f1)"
+
+          cat > "$package_root/DEBIAN/control" <<EOF
+          Package: frameseven
+          Version: $version
+          Section: utils
+          Priority: optional
+          Architecture: $DEB_ARCH
+          Installed-Size: $installed_size
+          Maintainer: Frame Seven Project <sayseven7@users.noreply.github.com>
+          Homepage: https://github.com/sayseven7/frameseven
+          Description: Offensive web security scanner
+           CLI-first scanner for authorized web security testing.
+          EOF
+
+          dpkg-deb --build --root-owner-group "$package_root" "dist/$package_file"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frameseven-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish release artifacts
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create checksums
+        working-directory: dist
+        run: sha256sum frameseven_* > SHA256SUMS
+
+      - name: Upload files to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/* --clobber
