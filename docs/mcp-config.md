@@ -21,6 +21,29 @@ http://127.0.0.1:8080/mcp
 Do not expose this server to the internet without access control — module tools
 send active security probes to targets.
 
+## Debugging with MCP Inspector
+
+The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a
+web-based tool for testing and debugging MCP servers interactively.
+
+Run it with FrameSeven over stdio:
+
+```bash
+npx @modelcontextprotocol/inspector \
+  go run ./cmd/mcp -transport stdio
+```
+
+Or point it to a running HTTP server:
+
+```bash
+npx @modelcontextprotocol/inspector \
+  -e MCP_URL=http://127.0.0.1:8080/mcp
+```
+
+The Inspector opens a local web interface where you can browse available tools,
+inspect their schemas, test calls with custom arguments, and view results and
+logs.
+
 ## Configuration by Provider
 
 ### opencode
