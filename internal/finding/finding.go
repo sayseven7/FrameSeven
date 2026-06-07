@@ -1,3 +1,4 @@
+// Package finding defines the finding model used across all framework tools.
 package finding
 
 // Severity is the impact ranking of a finding.

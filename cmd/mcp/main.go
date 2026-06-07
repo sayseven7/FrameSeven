@@ -1,3 +1,5 @@
+// Package main implements the frameseven MCP server entry point. It starts
+// either a stdio or HTTP transport for the FrameSeven MCP server.
 package main
 
 import (

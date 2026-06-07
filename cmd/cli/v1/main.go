@@ -1,3 +1,5 @@
+// Package main implements the frameseven CLI v1 entry point. It parses flags,
+// runs an optional interactive wizard, and orchestrates a scan via scanner.Scan.
 package main
 
 import (

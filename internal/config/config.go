@@ -1,3 +1,5 @@
+// Package config defines the scan configuration and provides a factory that
+// applies project-level defaults for timeout, user agent, and rate limits.
 package config
 
 import (
@@ -34,6 +36,8 @@ type Config struct {
 	Verbose bool
 }
 
+// Project-level defaults. New applies these when the caller does not supply
+// an explicit value.
 const (
 	DefaultTimeout      = 10 * time.Second
 	DefaultUserAgent    = "frameseven/v1"
