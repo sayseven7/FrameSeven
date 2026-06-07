@@ -31,6 +31,7 @@ Keep changes simple, local, readable, and aligned with the current project.
 │               └── example_test.py
 
 And use Go as a wrapper to call this function.
+- If any external libraries are needed, first request permission from the user to install them.
 
 ---
 
