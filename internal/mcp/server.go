@@ -3,6 +3,7 @@ package mcp
 
 import (
 	"context"
+	"net/http"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -19,6 +20,8 @@ func NewServer() *mcpsdk.Server {
 		Version: serverBuild,
 	}, nil)
 
+	server.AddReceivingMiddleware(createLoggingMiddleware())
+
 	RegisterTools(server)
 
 	return server
@@ -27,4 +30,40 @@ func NewServer() *mcpsdk.Server {
 // Run starts the MCP server over stdin/stdout.
 func Run(ctx context.Context) error {
 	return NewServer().Run(ctx, &mcpsdk.StdioTransport{})
+}
+
+// NewStreamableHTTPHandler builds the HTTP handler used by remote MCP clients.
+func NewStreamableHTTPHandler() http.Handler {
+	server := NewServer()
+
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", mcpsdk.NewStreamableHTTPHandler(func(req *http.Request) *mcpsdk.Server {
+		return server
+	}, nil))
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
+
+	return mux
+}
+
+// RunHTTP starts the MCP server over Streamable HTTP.
+func RunHTTP(ctx context.Context, addr string) error {
+	server := &http.Server{
+		Addr:    addr,
+		Handler: NewStreamableHTTPHandler(),
+	}
+
+	go func() {
+		<-ctx.Done()
+		_ = server.Shutdown(context.Background())
+	}()
+
+	err := server.ListenAndServe()
+	if err == http.ErrServerClosed {
+		return nil
+	}
+
+	return err
 }

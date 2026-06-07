@@ -5,10 +5,10 @@ versioned as a framework contract and can expose tools for multiple framework
 versions. Tool names are versioned so clients can choose the exact tool
 contract they are calling.
 
-Run the server over stdin/stdout:
+Run the server locally over stdin/stdout:
 
 ```bash
-go run ./cmd/mcp
+go run ./cmd/mcp -transport stdio
 ```
 
 After installing a release archive:
@@ -16,6 +16,22 @@ After installing a release archive:
 ```bash
 frameseven-mcp
 ```
+
+Run the server for remote agents over Streamable HTTP:
+
+```bash
+go run ./cmd/mcp -transport http -addr 127.0.0.1:8080
+```
+
+The MCP endpoint is:
+
+```text
+http://127.0.0.1:8080/mcp
+```
+
+Use `0.0.0.0:8080` only when the server is behind an access-controlled network,
+reverse proxy, tunnel, or firewall rule. Module tools can send active security
+probes, so do not expose this server openly to the internet.
 
 ## Tool Naming
 

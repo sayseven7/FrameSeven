@@ -136,6 +136,14 @@ Run the MCP server over stdin/stdout:
 ./bin/frameseven/mcp
 ```
 
+Run the MCP server over Streamable HTTP for remote agents:
+
+```bash
+./bin/frameseven/mcp -transport http -addr 127.0.0.1:8080
+```
+
+The HTTP MCP endpoint is `/mcp`.
+
 ## Install a Development Build
 
 Install the current build as `frameseven` in a directory already included in
