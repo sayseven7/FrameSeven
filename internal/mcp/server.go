@@ -64,7 +64,7 @@ func RunHTTP(ctx context.Context, addr string) error {
 		_ = server.Shutdown(ctx)
 	}()
 
-	log.Printf("MCP server listening on %s", addr)
+	log.Printf("MCP server listening on http://%s", addr)
 
 	err := server.ListenAndServe()
 	if err == http.ErrServerClosed {
