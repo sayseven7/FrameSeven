@@ -35,20 +35,6 @@ const legacyBanner = `
 
 var buildVersion = "development"
 
-var modules = []struct {
-	Name        string
-	Description string
-}{
-	{"recon", "DNS, technology, endpoint, parameter, and sensitive-file discovery"},
-	{"sqli", "SQL injection detection and data extraction"},
-	{"access", "Unauthenticated endpoint and IDOR checks"},
-	{"ssrf", "Internal service and cloud metadata SSRF checks"},
-	{"lfi", "Local file inclusion and path traversal checks"},
-	{"misconfig", "Security header, HTTP method, CORS, and TLS checks"},
-	{"ratelimit", "Request burst and rate-limit behavior checks"},
-	{"cve", "NVD CVE lookup for detected product versions"},
-}
-
 type scanFunc func(*config.Config) report.Report
 
 type options struct {
@@ -310,7 +296,7 @@ func promptModules(reader *bufio.Reader, output io.Writer, current []string) []s
 
 	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Available tools")
-	for i, module := range modules {
+	for i, module := range scanner.Modules {
 		fmt.Fprintf(output, "  %d) %-10s %s\n", i+1, module.Name, module.Description)
 	}
 
@@ -328,7 +314,7 @@ func promptModules(reader *bufio.Reader, output io.Writer, current []string) []s
 func writeModules(output io.Writer) {
 	fmt.Fprintln(output, "Framework modules v1")
 
-	for _, module := range modules {
+	for _, module := range scanner.Modules {
 		fmt.Fprintf(output, "  %-10s %s\n", module.Name, module.Description)
 	}
 }
@@ -340,11 +326,11 @@ func writeBanner(output io.Writer) {
 func parseModuleList(value string) ([]string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" || strings.EqualFold(value, "all") {
-		return allModuleNames(), nil
+		return scanner.NormalizeModules(nil)
 	}
 
 	byName := map[string]string{}
-	for i, module := range modules {
+	for i, module := range scanner.Modules {
 		byName[module.Name] = module.Name
 		byName[strconv.Itoa(i+1)] = module.Name
 	}
@@ -375,38 +361,7 @@ func parseModuleList(value string) ([]string, error) {
 		return nil, errors.New("at least one scanner module must be selected")
 	}
 
-	return includeRequiredModules(selected), nil
-}
-
-func includeRequiredModules(selected []string) []string {
-	needsRecon := false
-	for _, name := range selected {
-		switch name {
-		case "sqli", "access", "ssrf", "lfi", "cve":
-			needsRecon = true
-		}
-	}
-
-	if !needsRecon {
-		return selected
-	}
-
-	for _, name := range selected {
-		if name == "recon" {
-			return selected
-		}
-	}
-
-	return append([]string{"recon"}, selected...)
-}
-
-func allModuleNames() []string {
-	names := make([]string, 0, len(modules))
-	for _, module := range modules {
-		names = append(names, module.Name)
-	}
-
-	return names
+	return scanner.NormalizeModules(selected)
 }
 
 func isTerminal(file *os.File) bool {

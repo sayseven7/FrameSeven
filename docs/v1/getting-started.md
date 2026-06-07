@@ -57,7 +57,7 @@ NVD_API_KEY=your-key frameseven -url https://target.example
 
 ## Framework v1 Scan Pipeline
 
-Framework v1 runs these modules in order:
+Framework v1 runs selected modules in this order. By default, every module is selected:
 
 1. `recon`: resolves DNS, fingerprints technologies, discovers endpoints and
    parameters, and probes known sensitive paths.

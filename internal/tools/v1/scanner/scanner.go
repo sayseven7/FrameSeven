@@ -5,10 +5,12 @@ package scanner
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +28,24 @@ import (
 	"github.com/sayseven7/frameseven/internal/tools/v1/ssrf"
 )
 
+// Module describes one scanner module exposed by Framework v1.
+type Module struct {
+	Name        string
+	Description string
+}
+
+// Modules is the ordered Framework v1 scanner module catalog.
+var Modules = []Module{
+	{"recon", "DNS, technology, endpoint, parameter, and sensitive-file discovery"},
+	{"sqli", "SQL injection detection and data extraction"},
+	{"access", "Unauthenticated endpoint and IDOR checks"},
+	{"ssrf", "Internal service and cloud metadata SSRF checks"},
+	{"lfi", "Local file inclusion and path traversal checks"},
+	{"misconfig", "Security header, HTTP method, CORS, and TLS checks"},
+	{"ratelimit", "Request burst and rate-limit behavior checks"},
+	{"cve", "NVD CVE lookup for detected product versions"},
+}
+
 // Scan runs the full pipeline and returns a report.
 func Scan(cfg *config.Config) report.Report {
 	started := time.Now()
@@ -40,82 +60,93 @@ func Scan(cfg *config.Config) report.Report {
 
 	var findings []finding.Finding
 	var scanErrors []report.ScanErrorV1
-	enabled := selectedModules(cfg.SelectedModules)
+	selected, err := NormalizeModules(cfg.SelectedModules)
+	if err != nil {
+		scanErrors = append(scanErrors, report.ScanErrorV1{
+			Module:  "scanner",
+			Message: err.Error(),
+		})
+
+		return report.New("v1", cfg.Target, started, time.Since(started), recon.Surface{}, findings, scanErrors)
+	}
+
+	enabled := selectedModules(selected)
 
 	surface := recon.Surface{}
-	var moduleFindings []finding.Finding
-	var moduleErrors []report.ScanErrorV1
 
-	if enabled["recon"] {
-		moduleStarted := startModule(logger, "recon", "mapping the target attack surface")
-		surface, moduleFindings = recon.Run(cfg, client)
-		findings = append(findings, moduleFindings...)
-		moduleErrors = recorder.Take("recon")
-		scanErrors = append(scanErrors, moduleErrors...)
-		finishModule(logger, "recon", moduleStarted, len(moduleFindings), len(moduleErrors))
+	steps := []moduleStep{
+		{
+			name:     "recon",
+			activity: "mapping the target attack surface",
+			run: func() []finding.Finding {
+				var reconFindings []finding.Finding
+				surface, reconFindings = recon.Run(cfg, client)
+
+				return reconFindings
+			},
+		},
+		{
+			name:     "sqli",
+			activity: "testing SQL injection vectors",
+			run: func() []finding.Finding {
+				return sqli.Run(cfg, client, surface)
+			},
+		},
+		{
+			name:     "access",
+			activity: "testing unauthenticated access and IDOR behavior",
+			run: func() []finding.Finding {
+				return access.Run(cfg, client, surface)
+			},
+		},
+		{
+			name:     "ssrf",
+			activity: "testing server-side request forgery vectors",
+			run: func() []finding.Finding {
+				return ssrf.Run(cfg, client, surface)
+			},
+		},
+		{
+			name:     "lfi",
+			activity: "testing file inclusion and path traversal vectors",
+			run: func() []finding.Finding {
+				return lfi.Run(cfg, client, surface)
+			},
+		},
+		{
+			name:     "misconfig",
+			activity: "checking HTTP and TLS configuration",
+			run: func() []finding.Finding {
+				return misconfig.Run(cfg, client)
+			},
+		},
+		{
+			name:     "ratelimit",
+			activity: "checking request rate-limit behavior",
+			run: func() []finding.Finding {
+				return ratelimit.Run(cfg, client)
+			},
+		},
+		{
+			name:     "cve",
+			activity: "looking up CVEs for detected products",
+			run: func() []finding.Finding {
+				return cve.Run(cfg, client, surface)
+			},
+		},
 	}
 
-	if enabled["sqli"] {
-		moduleStarted := startModule(logger, "sqli", "testing SQL injection vectors")
-		moduleFindings = sqli.Run(cfg, client, surface)
-		findings = append(findings, moduleFindings...)
-		moduleErrors = recorder.Take("sqli")
-		scanErrors = append(scanErrors, moduleErrors...)
-		finishModule(logger, "sqli", moduleStarted, len(moduleFindings), len(moduleErrors))
-	}
+	for _, step := range steps {
+		if !enabled[step.name] {
+			continue
+		}
 
-	if enabled["access"] {
-		moduleStarted := startModule(logger, "access", "testing unauthenticated access and IDOR behavior")
-		moduleFindings = access.Run(cfg, client, surface)
+		moduleStarted := startModule(logger, step.name, step.activity)
+		moduleFindings := step.run()
 		findings = append(findings, moduleFindings...)
-		moduleErrors = recorder.Take("access")
+		moduleErrors := recorder.Take(step.name)
 		scanErrors = append(scanErrors, moduleErrors...)
-		finishModule(logger, "access", moduleStarted, len(moduleFindings), len(moduleErrors))
-	}
-
-	if enabled["ssrf"] {
-		moduleStarted := startModule(logger, "ssrf", "testing server-side request forgery vectors")
-		moduleFindings = ssrf.Run(cfg, client, surface)
-		findings = append(findings, moduleFindings...)
-		moduleErrors = recorder.Take("ssrf")
-		scanErrors = append(scanErrors, moduleErrors...)
-		finishModule(logger, "ssrf", moduleStarted, len(moduleFindings), len(moduleErrors))
-	}
-
-	if enabled["lfi"] {
-		moduleStarted := startModule(logger, "lfi", "testing file inclusion and path traversal vectors")
-		moduleFindings = lfi.Run(cfg, client, surface)
-		findings = append(findings, moduleFindings...)
-		moduleErrors = recorder.Take("lfi")
-		scanErrors = append(scanErrors, moduleErrors...)
-		finishModule(logger, "lfi", moduleStarted, len(moduleFindings), len(moduleErrors))
-	}
-
-	if enabled["misconfig"] {
-		moduleStarted := startModule(logger, "misconfig", "checking HTTP and TLS configuration")
-		moduleFindings = misconfig.Run(cfg, client)
-		findings = append(findings, moduleFindings...)
-		moduleErrors = recorder.Take("misconfig")
-		scanErrors = append(scanErrors, moduleErrors...)
-		finishModule(logger, "misconfig", moduleStarted, len(moduleFindings), len(moduleErrors))
-	}
-
-	if enabled["ratelimit"] {
-		moduleStarted := startModule(logger, "ratelimit", "checking request rate-limit behavior")
-		moduleFindings = ratelimit.Run(cfg, client)
-		findings = append(findings, moduleFindings...)
-		moduleErrors = recorder.Take("ratelimit")
-		scanErrors = append(scanErrors, moduleErrors...)
-		finishModule(logger, "ratelimit", moduleStarted, len(moduleFindings), len(moduleErrors))
-	}
-
-	if enabled["cve"] {
-		moduleStarted := startModule(logger, "cve", "looking up CVEs for detected products")
-		moduleFindings = cve.Run(cfg, client, surface)
-		findings = append(findings, moduleFindings...)
-		moduleErrors = recorder.Take("cve")
-		scanErrors = append(scanErrors, moduleErrors...)
-		finishModule(logger, "cve", moduleStarted, len(moduleFindings), len(moduleErrors))
+		finishModule(logger, step.name, moduleStarted, len(moduleFindings), len(moduleErrors))
 	}
 
 	logger.Printf(
@@ -128,18 +159,80 @@ func Scan(cfg *config.Config) report.Report {
 	return report.New("v1", cfg.Target, started, time.Since(started), surface, findings, scanErrors)
 }
 
-func selectedModules(names []string) map[string]bool {
-	enabled := map[string]bool{}
-	if len(names) == 0 {
-		for _, name := range []string{"recon", "sqli", "access", "ssrf", "lfi", "misconfig", "ratelimit", "cve"} {
-			enabled[name] = true
-		}
+type moduleStep struct {
+	name     string
+	activity string
+	run      func() []finding.Finding
+}
 
-		return enabled
+// ModuleNames returns every Framework v1 module name in execution order.
+func ModuleNames() []string {
+	names := make([]string, 0, len(Modules))
+	for _, module := range Modules {
+		names = append(names, module.Name)
 	}
 
+	return names
+}
+
+// NormalizeModules validates module names and includes required dependencies.
+// Empty input means every Framework v1 module is enabled.
+func NormalizeModules(names []string) ([]string, error) {
+	if len(names) == 0 {
+		return ModuleNames(), nil
+	}
+
+	valid := map[string]bool{}
+	for _, module := range Modules {
+		valid[module.Name] = true
+	}
+
+	seen := map[string]bool{}
+	var selected []string
+
+	for _, raw := range names {
+		name := strings.ToLower(strings.TrimSpace(raw))
+		if name == "" {
+			continue
+		}
+
+		if !valid[name] {
+			return nil, fmt.Errorf("unknown scanner module %q", raw)
+		}
+
+		if !seen[name] {
+			seen[name] = true
+			selected = append(selected, name)
+		}
+	}
+
+	if len(selected) == 0 {
+		return nil, errors.New("at least one scanner module must be selected")
+	}
+
+	return includeRequiredModules(selected), nil
+}
+
+func includeRequiredModules(selected []string) []string {
+	needsRecon := false
+	for _, name := range selected {
+		switch name {
+		case "sqli", "access", "ssrf", "lfi", "cve":
+			needsRecon = true
+		}
+	}
+
+	if !needsRecon || slices.Contains(selected, "recon") {
+		return selected
+	}
+
+	return append([]string{"recon"}, selected...)
+}
+
+func selectedModules(names []string) map[string]bool {
+	enabled := map[string]bool{}
 	for _, name := range names {
-		enabled[strings.ToLower(strings.TrimSpace(name))] = true
+		enabled[name] = true
 	}
 
 	return enabled

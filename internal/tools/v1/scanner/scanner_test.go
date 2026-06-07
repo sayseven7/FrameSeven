@@ -145,3 +145,29 @@ func TestScanRunsOnlySelectedModules(t *testing.T) {
 		t.Errorf("misconfig did not run:\n%s", logs.String())
 	}
 }
+
+func TestScanReportsInvalidSelectedModule(t *testing.T) {
+	cfg := config.New("https://example.com")
+	cfg.SelectedModules = []string{"banana"}
+
+	rep := Scan(&cfg)
+
+	if len(rep.Errors) != 1 {
+		t.Fatalf("errors = %+v, want one scanner error", rep.Errors)
+	}
+
+	if rep.Errors[0].Module != "scanner" || !strings.Contains(rep.Errors[0].Message, "banana") {
+		t.Fatalf("unexpected error: %+v", rep.Errors[0])
+	}
+}
+
+func TestNormalizeModulesAddsReconDependency(t *testing.T) {
+	got, err := NormalizeModules([]string{"sqli", "misconfig"})
+	if err != nil {
+		t.Fatalf("NormalizeModules: %v", err)
+	}
+
+	if strings.Join(got, ",") != "recon,sqli,misconfig" {
+		t.Fatalf("modules = %v", got)
+	}
+}
