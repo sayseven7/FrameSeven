@@ -11,7 +11,7 @@ The current framework and CLI contract is v1.
 - [Installation v1](v1/installation.md)
 - [Getting Started with Framework v1](v1/getting-started.md)
 - [CLI Commands v1](v1/cli.md)
-- [MCP Server](v1/mcp.md)
+- [MCP Server](mcp.md)
 - [CLI Output Format v1](v1/report-format.md)
 
 ## Distribution Status
