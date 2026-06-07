@@ -18,8 +18,20 @@ import (
 	"github.com/sayseven7/frameseven/internal/tools/v1/scanner"
 )
 
-const banner = "frameseven CLI v1 - offensive web scanner"
+const bannerTitle = "frameseven CLI v1 - offensive web scanner"
 const defaultOutputDir = "reports"
+
+const legacyBanner = `
+                 (` + "`" + `-').-> (` + "`" + `-')  _         _  (` + "`" + `-')
+                 (OO )__  ( OO).-/  <-.    \-.(OO )
+                ,--. ,'-'(,------.,--. )   _.'    \
+                |  | |  | |  .---'|  (` + "`" + `-')(_...--''
+                |  ` + "`" + `-'  |(|  '--. |  |OO )|  |_.'
+                |  .-.  | |  .--'(|  '__ ||  .___.
+                |  | |  | |  ` + "`" + `---.|     |'|  |
+                ` + "`" + `--' ` + "`" + `--' ` + "`" + `------'` + "`" + `-----' ` + "`" + `--'
+                            FrameSeven v1.0.0 Version
+`
 
 var buildVersion = "development"
 
@@ -51,6 +63,7 @@ type options struct {
 	verbose     bool
 	version     bool
 	listModules bool
+	modules     []string
 }
 
 func main() {
@@ -100,6 +113,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 	cfg.RateRequests = opts.rate
 	cfg.UserAgent = opts.userAgent
 	cfg.NVDAPIKey = os.Getenv("NVD_API_KEY")
+	cfg.SelectedModules = opts.modules
 
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)
@@ -120,9 +134,14 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 
 	cfg.Logger = log.New(logOutput, "", log.Ltime)
 	cfg.Verbose = opts.verbose
-	cfg.Logger.Printf("INFO  %s", banner)
+	if !opts.quiet {
+		writeBanner(stderr)
+	}
+
+	cfg.Logger.Printf("INFO  %s", bannerTitle)
 	cfg.Logger.Printf("INFO  scan started for %s", cfg.Target)
 	cfg.Logger.Printf("INFO  output directory: %s", opts.outputDir)
+	cfg.Logger.Printf("INFO  selected modules: %s", strings.Join(cfg.SelectedModules, ", "))
 
 	rep := scan(&cfg)
 
@@ -169,7 +188,12 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.BoolVar(&opts.version, "version", false, "show the installed version")
 	flags.BoolVar(&opts.listModules, "list-modules", false, "list scanner modules")
 
+	var moduleList string
+	flags.StringVar(&moduleList, "modules", "", "comma-separated scanner modules to run, or all")
+	flags.StringVar(&moduleList, "tools", "", "comma-separated scanner modules to run, or all")
+
 	flags.Usage = func() {
+		writeBanner(stderr)
 		fmt.Fprintln(stderr, "Usage: frameseven -url https://target.example [flags]")
 		fmt.Fprintln(stderr, "       frameseven --interactive")
 		fmt.Fprintln(stderr)
@@ -187,13 +211,22 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return options{}, err
 	}
 
+	modules, err := parseModuleList(moduleList)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+
+		return options{}, err
+	}
+
+	opts.modules = modules
+
 	return opts, nil
 }
 
 func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) {
 	reader := bufio.NewReader(input)
 
-	fmt.Fprintln(output, banner)
+	writeBanner(output)
 	fmt.Fprintln(output, "Interactive scan setup")
 	fmt.Fprintln(output)
 
@@ -202,6 +235,7 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 	opts.rate = promptInt(reader, output, "Rate-limit request count", opts.rate)
 	opts.userAgent = prompt(reader, output, "User-Agent", opts.userAgent)
 	opts.outputDir = prompt(reader, output, "Output directory", opts.outputDir)
+	opts.modules = promptModules(reader, output, opts.modules)
 
 	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Scan configuration")
@@ -210,6 +244,7 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 	fmt.Fprintf(output, "  Rate count: %d\n", opts.rate)
 	fmt.Fprintf(output, "  User-Agent: %s\n", opts.userAgent)
 	fmt.Fprintf(output, "  Output:     %s\n", opts.outputDir)
+	fmt.Fprintf(output, "  Modules:    %s\n", strings.Join(opts.modules, ", "))
 
 	if opts.yes {
 		return opts, true
@@ -267,12 +302,111 @@ func promptInt(reader *bufio.Reader, output io.Writer, label string, defaultValu
 	}
 }
 
+func promptModules(reader *bufio.Reader, output io.Writer, current []string) []string {
+	defaultValue := "all"
+	if len(current) > 0 {
+		defaultValue = strings.Join(current, ",")
+	}
+
+	fmt.Fprintln(output)
+	fmt.Fprintln(output, "Available tools")
+	for i, module := range modules {
+		fmt.Fprintf(output, "  %d) %-10s %s\n", i+1, module.Name, module.Description)
+	}
+
+	for {
+		value := prompt(reader, output, "Tools to run (numbers or names, comma-separated)", defaultValue)
+		selected, err := parseModuleList(value)
+		if err == nil {
+			return selected
+		}
+
+		fmt.Fprintf(output, "%v\n", err)
+	}
+}
+
 func writeModules(output io.Writer) {
 	fmt.Fprintln(output, "Framework modules v1")
 
 	for _, module := range modules {
 		fmt.Fprintf(output, "  %-10s %s\n", module.Name, module.Description)
 	}
+}
+
+func writeBanner(output io.Writer) {
+	fmt.Fprint(output, legacyBanner)
+}
+
+func parseModuleList(value string) ([]string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.EqualFold(value, "all") {
+		return allModuleNames(), nil
+	}
+
+	byName := map[string]string{}
+	for i, module := range modules {
+		byName[module.Name] = module.Name
+		byName[strconv.Itoa(i+1)] = module.Name
+	}
+
+	seen := map[string]bool{}
+	var selected []string
+
+	for _, part := range strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ' ' || r == ';'
+	}) {
+		part = strings.ToLower(strings.TrimSpace(part))
+		if part == "" {
+			continue
+		}
+
+		name, ok := byName[part]
+		if !ok {
+			return nil, fmt.Errorf("unknown scanner module %q", part)
+		}
+
+		if !seen[name] {
+			seen[name] = true
+			selected = append(selected, name)
+		}
+	}
+
+	if len(selected) == 0 {
+		return nil, errors.New("at least one scanner module must be selected")
+	}
+
+	return includeRequiredModules(selected), nil
+}
+
+func includeRequiredModules(selected []string) []string {
+	needsRecon := false
+	for _, name := range selected {
+		switch name {
+		case "sqli", "access", "ssrf", "lfi", "cve":
+			needsRecon = true
+		}
+	}
+
+	if !needsRecon {
+		return selected
+	}
+
+	for _, name := range selected {
+		if name == "recon" {
+			return selected
+		}
+	}
+
+	return append([]string{"recon"}, selected...)
+}
+
+func allModuleNames() []string {
+	names := make([]string, 0, len(modules))
+	for _, module := range modules {
+		names = append(names, module.Name)
+	}
+
+	return names
 }
 
 func isTerminal(file *os.File) bool {

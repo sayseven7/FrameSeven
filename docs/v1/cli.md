@@ -33,6 +33,8 @@ For a development build that has not been installed:
 | `-yes`, `-y` | disabled | Skip the wizard's final confirmation |
 | `-quiet`, `-q` | disabled | Hide banner and progress messages |
 | `-verbose`, `-v` | disabled | Include HTTP request, response, duration, and error debug logs |
+| `-modules` | `all` | Comma-separated Framework v1 modules to run |
+| `-tools` | `all` | Alias for `-modules` |
 | `-version` | disabled | Print the installed build version |
 | `-list-modules` | disabled | List all Framework v1 scanner modules |
 
@@ -55,6 +57,7 @@ interactive setup. It asks for:
 - Rate-limit request count
 - User-Agent
 - Output directory
+- Scanner tools to run
 
 The wizard displays the resulting configuration and requires confirmation
 before starting because Framework v1 sends active security probes.
@@ -115,6 +118,17 @@ List the modules included in Framework v1:
 ```bash
 frameseven --list-modules
 ```
+
+Run only selected scanner tools:
+
+```bash
+frameseven \
+  -url https://target.example \
+  -modules sqli,misconfig
+```
+
+When a selected tool needs the discovered attack surface (`sqli`, `access`,
+`ssrf`, `lfi`, or `cve`), CLI v1 includes `recon` automatically.
 
 Print the installed version:
 

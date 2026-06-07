@@ -113,3 +113,35 @@ func TestScanProducesReport(t *testing.T) {
 		}
 	}
 }
+
+func TestScanRunsOnlySelectedModules(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("<html><body>home</body></html>"))
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+	cfg.SelectedModules = []string{"recon", "misconfig"}
+
+	var logs bytes.Buffer
+	cfg.Logger = log.New(&logs, "", 0)
+
+	rep := Scan(&cfg)
+
+	if rep.Surface.Host == "" {
+		t.Errorf("expected recon to populate the surface")
+	}
+
+	if strings.Contains(logs.String(), "[sqli] started") {
+		t.Errorf("sqli ran even though it was not selected:\n%s", logs.String())
+	}
+
+	if strings.Contains(logs.String(), "[ratelimit] started") {
+		t.Errorf("ratelimit ran even though it was not selected:\n%s", logs.String())
+	}
+
+	if !strings.Contains(logs.String(), "[misconfig] started") {
+		t.Errorf("misconfig did not run:\n%s", logs.String())
+	}
+}

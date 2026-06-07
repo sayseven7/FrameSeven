@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,62 +40,83 @@ func Scan(cfg *config.Config) report.Report {
 
 	var findings []finding.Finding
 	var scanErrors []report.ScanErrorV1
+	enabled := selectedModules(cfg.SelectedModules)
 
-	moduleStarted := startModule(logger, "recon", "mapping the target attack surface")
-	surface, reconFindings := recon.Run(cfg, client)
-	findings = append(findings, reconFindings...)
-	moduleErrors := recorder.Take("recon")
-	scanErrors = append(scanErrors, moduleErrors...)
-	finishModule(logger, "recon", moduleStarted, len(reconFindings), len(moduleErrors))
+	surface := recon.Surface{}
+	var moduleFindings []finding.Finding
+	var moduleErrors []report.ScanErrorV1
 
-	moduleStarted = startModule(logger, "sqli", "testing SQL injection vectors")
-	moduleFindings := sqli.Run(cfg, client, surface)
-	findings = append(findings, moduleFindings...)
-	moduleErrors = recorder.Take("sqli")
-	scanErrors = append(scanErrors, moduleErrors...)
-	finishModule(logger, "sqli", moduleStarted, len(moduleFindings), len(moduleErrors))
+	if enabled["recon"] {
+		moduleStarted := startModule(logger, "recon", "mapping the target attack surface")
+		surface, moduleFindings = recon.Run(cfg, client)
+		findings = append(findings, moduleFindings...)
+		moduleErrors = recorder.Take("recon")
+		scanErrors = append(scanErrors, moduleErrors...)
+		finishModule(logger, "recon", moduleStarted, len(moduleFindings), len(moduleErrors))
+	}
 
-	moduleStarted = startModule(logger, "access", "testing unauthenticated access and IDOR behavior")
-	moduleFindings = access.Run(cfg, client, surface)
-	findings = append(findings, moduleFindings...)
-	moduleErrors = recorder.Take("access")
-	scanErrors = append(scanErrors, moduleErrors...)
-	finishModule(logger, "access", moduleStarted, len(moduleFindings), len(moduleErrors))
+	if enabled["sqli"] {
+		moduleStarted := startModule(logger, "sqli", "testing SQL injection vectors")
+		moduleFindings = sqli.Run(cfg, client, surface)
+		findings = append(findings, moduleFindings...)
+		moduleErrors = recorder.Take("sqli")
+		scanErrors = append(scanErrors, moduleErrors...)
+		finishModule(logger, "sqli", moduleStarted, len(moduleFindings), len(moduleErrors))
+	}
 
-	moduleStarted = startModule(logger, "ssrf", "testing server-side request forgery vectors")
-	moduleFindings = ssrf.Run(cfg, client, surface)
-	findings = append(findings, moduleFindings...)
-	moduleErrors = recorder.Take("ssrf")
-	scanErrors = append(scanErrors, moduleErrors...)
-	finishModule(logger, "ssrf", moduleStarted, len(moduleFindings), len(moduleErrors))
+	if enabled["access"] {
+		moduleStarted := startModule(logger, "access", "testing unauthenticated access and IDOR behavior")
+		moduleFindings = access.Run(cfg, client, surface)
+		findings = append(findings, moduleFindings...)
+		moduleErrors = recorder.Take("access")
+		scanErrors = append(scanErrors, moduleErrors...)
+		finishModule(logger, "access", moduleStarted, len(moduleFindings), len(moduleErrors))
+	}
 
-	moduleStarted = startModule(logger, "lfi", "testing file inclusion and path traversal vectors")
-	moduleFindings = lfi.Run(cfg, client, surface)
-	findings = append(findings, moduleFindings...)
-	moduleErrors = recorder.Take("lfi")
-	scanErrors = append(scanErrors, moduleErrors...)
-	finishModule(logger, "lfi", moduleStarted, len(moduleFindings), len(moduleErrors))
+	if enabled["ssrf"] {
+		moduleStarted := startModule(logger, "ssrf", "testing server-side request forgery vectors")
+		moduleFindings = ssrf.Run(cfg, client, surface)
+		findings = append(findings, moduleFindings...)
+		moduleErrors = recorder.Take("ssrf")
+		scanErrors = append(scanErrors, moduleErrors...)
+		finishModule(logger, "ssrf", moduleStarted, len(moduleFindings), len(moduleErrors))
+	}
 
-	moduleStarted = startModule(logger, "misconfig", "checking HTTP and TLS configuration")
-	moduleFindings = misconfig.Run(cfg, client)
-	findings = append(findings, moduleFindings...)
-	moduleErrors = recorder.Take("misconfig")
-	scanErrors = append(scanErrors, moduleErrors...)
-	finishModule(logger, "misconfig", moduleStarted, len(moduleFindings), len(moduleErrors))
+	if enabled["lfi"] {
+		moduleStarted := startModule(logger, "lfi", "testing file inclusion and path traversal vectors")
+		moduleFindings = lfi.Run(cfg, client, surface)
+		findings = append(findings, moduleFindings...)
+		moduleErrors = recorder.Take("lfi")
+		scanErrors = append(scanErrors, moduleErrors...)
+		finishModule(logger, "lfi", moduleStarted, len(moduleFindings), len(moduleErrors))
+	}
 
-	moduleStarted = startModule(logger, "ratelimit", "checking request rate-limit behavior")
-	moduleFindings = ratelimit.Run(cfg, client)
-	findings = append(findings, moduleFindings...)
-	moduleErrors = recorder.Take("ratelimit")
-	scanErrors = append(scanErrors, moduleErrors...)
-	finishModule(logger, "ratelimit", moduleStarted, len(moduleFindings), len(moduleErrors))
+	if enabled["misconfig"] {
+		moduleStarted := startModule(logger, "misconfig", "checking HTTP and TLS configuration")
+		moduleFindings = misconfig.Run(cfg, client)
+		findings = append(findings, moduleFindings...)
+		moduleErrors = recorder.Take("misconfig")
+		scanErrors = append(scanErrors, moduleErrors...)
+		finishModule(logger, "misconfig", moduleStarted, len(moduleFindings), len(moduleErrors))
+	}
 
-	moduleStarted = startModule(logger, "cve", "looking up CVEs for detected products")
-	moduleFindings = cve.Run(cfg, client, surface)
-	findings = append(findings, moduleFindings...)
-	moduleErrors = recorder.Take("cve")
-	scanErrors = append(scanErrors, moduleErrors...)
-	finishModule(logger, "cve", moduleStarted, len(moduleFindings), len(moduleErrors))
+	if enabled["ratelimit"] {
+		moduleStarted := startModule(logger, "ratelimit", "checking request rate-limit behavior")
+		moduleFindings = ratelimit.Run(cfg, client)
+		findings = append(findings, moduleFindings...)
+		moduleErrors = recorder.Take("ratelimit")
+		scanErrors = append(scanErrors, moduleErrors...)
+		finishModule(logger, "ratelimit", moduleStarted, len(moduleFindings), len(moduleErrors))
+	}
+
+	if enabled["cve"] {
+		moduleStarted := startModule(logger, "cve", "looking up CVEs for detected products")
+		moduleFindings = cve.Run(cfg, client, surface)
+		findings = append(findings, moduleFindings...)
+		moduleErrors = recorder.Take("cve")
+		scanErrors = append(scanErrors, moduleErrors...)
+		finishModule(logger, "cve", moduleStarted, len(moduleFindings), len(moduleErrors))
+	}
 
 	logger.Printf(
 		"INFO  scan completed in %s with %d finding(s) and %d error(s)",
@@ -104,6 +126,23 @@ func Scan(cfg *config.Config) report.Report {
 	)
 
 	return report.New("v1", cfg.Target, started, time.Since(started), surface, findings, scanErrors)
+}
+
+func selectedModules(names []string) map[string]bool {
+	enabled := map[string]bool{}
+	if len(names) == 0 {
+		for _, name := range []string{"recon", "sqli", "access", "ssrf", "lfi", "misconfig", "ratelimit", "cve"} {
+			enabled[name] = true
+		}
+
+		return enabled
+	}
+
+	for _, name := range names {
+		enabled[strings.ToLower(strings.TrimSpace(name))] = true
+	}
+
+	return enabled
 }
 
 // newClient builds the shared HTTP client. TLS verification is disabled so the

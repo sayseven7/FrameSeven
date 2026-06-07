@@ -86,6 +86,7 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 		"",
 		"",
 		outputDir,
+		"",
 		"yes",
 		"",
 	}, "\n")
@@ -116,6 +117,10 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 		t.Errorf("user agent = %q", received.UserAgent)
 	}
 
+	if strings.Join(received.SelectedModules, ",") != "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve" {
+		t.Errorf("selected modules = %v", received.SelectedModules)
+	}
+
 	assertReportFiles(t, outputDir)
 }
 
@@ -131,6 +136,7 @@ func TestRunWizardAcceptsCustomValuesWithYesFlag(t *testing.T) {
 		"12",
 		"security-team/v1",
 		outputDir,
+		"2,5",
 	}, "\n")
 
 	code := run([]string{"--interactive", "--yes", "--quiet"}, strings.NewReader(input), &stdout, &stderr, true, func(cfg *config.Config) report.Report {
@@ -155,6 +161,10 @@ func TestRunWizardAcceptsCustomValuesWithYesFlag(t *testing.T) {
 		t.Errorf("user agent = %q", received.UserAgent)
 	}
 
+	if strings.Join(received.SelectedModules, ",") != "recon,sqli,lfi" {
+		t.Errorf("selected modules = %v", received.SelectedModules)
+	}
+
 	if strings.Contains(stderr.String(), "scanning") {
 		t.Errorf("quiet mode wrote progress: %q", stderr.String())
 	}
@@ -169,6 +179,7 @@ func TestRunWizardCancellationDoesNotScan(t *testing.T) {
 
 	input := strings.Join([]string{
 		"https://example.com",
+		"",
 		"",
 		"",
 		"",
@@ -189,6 +200,34 @@ func TestRunWizardCancellationDoesNotScan(t *testing.T) {
 
 	if called {
 		t.Fatal("scan was called after cancellation")
+	}
+}
+
+func TestRunAcceptsModuleFlag(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	var received config.Config
+	outputDir := t.TempDir()
+
+	code := run(
+		[]string{"-url", "https://example.com", "--out", outputDir, "--modules", "sqli,misconfig", "--quiet"},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		false,
+		func(cfg *config.Config) report.Report {
+			received = *cfg
+
+			return report.Report{}
+		},
+	)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, stderr.String())
+	}
+
+	if strings.Join(received.SelectedModules, ",") != "recon,sqli,misconfig" {
+		t.Errorf("selected modules = %v", received.SelectedModules)
 	}
 }
 
