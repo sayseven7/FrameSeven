@@ -6,6 +6,46 @@ Thank you for considering contributing to FrameSeven! This document outlines the
 
 This project follows a [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## Language
+
+Everything in the project must be written in English.
+
+- This applies to code, documentation, comments, commit messages, CLI text, tests, issue descriptions, and AI-assisted changes.
+- Contributors and AI agents must keep all new content in English.
+
+## Versioning
+
+Framework changes must be versioned for both code and documentation.
+
+- Any framework-level code, public contract, reusable module, API shape, CLI contract, or shared structure must have an explicit version.
+- This applies equally to human contributors and AI-assisted changes.
+- Version identifiers must appear in folder structures whenever the change introduces or updates a public or evolving framework surface.
+- The version format is fixed: use `v1`, `v2`, `v3`, and so on.
+- The CLI must also follow this rule whenever it exposes commands, flags, input, output, config, or any other public contract.
+- Documentation must name the version it describes.
+- Do not replace an older version implicitly when adding a new one unless the change explicitly intends a migration or removal.
+- Keep examples, paths, and docs synchronized with the implemented version.
+
+### Folder Structure
+
+```text
+tools/v1/example/
+cmd/cli/v1/
+```
+
+If a Go wrapper calls another implementation, keep the version visible in the same structure whenever that code is part of the framework surface.
+
+### Documentation
+
+When documenting framework behavior, always mention the version in titles, sections, or examples.
+
+Examples:
+
+- `Framework API v1`
+- `CLI commands v1`
+- `Configuration schema v1`
+- `Migration guide: v1 to v2`
+
 ## Commit Guidelines
 
 We follow a structured commit format based on [Conventional Commits](https://www.conventionalcommits.org/):

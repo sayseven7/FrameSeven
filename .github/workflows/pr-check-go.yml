@@ -11,7 +11,7 @@ on:
       - "cmd/**"
       - "go.mod"
       - "go.sum"
-      - ".github/workflows/pr-check.yml"
+      - ".github/workflows/pr-check-go.yml"
 
   pull_request:
     paths:
@@ -19,7 +19,7 @@ on:
       - "cmd/**"
       - "go.mod"
       - "go.sum"
-      - ".github/workflows/pr-check.yml"
+      - ".github/workflows/pr-check-go.yml"
 
 jobs:
   backend:
@@ -64,14 +64,14 @@ jobs:
         run: govulncheck ./...
 
       - name: Create bin directory if it doesn't exist
-        run: mkdir -p bin
+        run: mkdir -p bin/frameseven/cli
 
       - name: Build
-        run: go build -o bin/frameseven ./cmd/cli/main.go
+        run: go build -o bin/frameseven/cli/v1 ./cmd/cli/v1/main.go
 
       - name: Check if the binary was created
         run: |
-          if [ -f "bin/frameseven" ]; then
+          if [ -f "bin/frameseven/cli/v1" ]; then
             echo "Binary created successfully."
           else
             echo "Error: Binary not found!"
