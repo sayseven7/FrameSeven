@@ -11,16 +11,39 @@ import (
 )
 
 const (
-	serverName  = "frameseven-mcp"
-	serverBuild = "development"
+	serverName    = "frameseven-mcp"
+	serverVersion = "development"
+	serverTitle   = "FrameSeven MCP Server"
+	serverDocs    = "https://github.com/sayseven7/frameseven"
 )
+
+const serverInstructions = `Exposes FrameSeven v1 scanner tools:
+
+Tools:
+  recon, sqli, access, ssrf, lfi, misconfig, ratelimit, cve,
+  crawler, content, subdomain, ports, nmap, sqlmap, bannergrab
+
+Tips:
+  - normalize_tools validates a selection without running any probes.
+  - extra_tools composes multiple scanners in a single call.
+  - timeout_seconds and rate_requests override scan defaults.`
 
 // NewServer builds the FrameSeven MCP server.
 func NewServer() *mcpsdk.Server {
 	server := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    serverName,
-		Version: serverBuild,
-	}, nil)
+		Version: serverVersion,
+		Title:   serverTitle,
+	}, &mcpsdk.ServerOptions{
+		Instructions: serverInstructions,
+		Capabilities: &mcpsdk.ServerCapabilities{
+			Tools: &mcpsdk.ToolCapabilities{
+				ListChanged: false,
+			},
+			Logging: &mcpsdk.LoggingCapabilities{},
+		},
+		KeepAlive: 30 * time.Second,
+	})
 
 	server.AddReceivingMiddleware(createLoggingMiddleware())
 
@@ -53,7 +76,7 @@ func NewStreamableHTTPHandler() http.Handler {
 
 // RunHTTP starts the MCP server over Streamable HTTP.
 func RunHTTP(ctx context.Context, addr string) error {
-	server := &http.Server{
+	srv := &http.Server{
 		Addr:              addr,
 		Handler:           NewStreamableHTTPHandler(),
 		ReadHeaderTimeout: 30 * time.Second,
@@ -61,12 +84,12 @@ func RunHTTP(ctx context.Context, addr string) error {
 
 	go func() {
 		<-ctx.Done()
-		_ = server.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 	}()
 
 	log.Printf("MCP server listening on http://%s", addr)
 
-	err := server.ListenAndServe()
+	err := srv.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil
 	}
