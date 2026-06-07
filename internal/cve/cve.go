@@ -221,7 +221,7 @@ func normalizeProductName(value string) string {
 }
 
 // parseNVD turns an NVD API response into findings. It is the pure, testable
-// core of the module.
+// core of the tool.
 func parseNVD(data []byte, keyword, cpeName string) []finding.Finding {
 	var parsed nvdResponse
 	if err := json.Unmarshal(data, &parsed); err != nil {

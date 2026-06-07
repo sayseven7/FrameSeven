@@ -20,7 +20,7 @@ func WriteMarkdown(w io.Writer, rep Report) error {
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "- Findings: **%d**\n", len(rep.Findings))
 	fmt.Fprintf(w, "- %s\n", strings.TrimSpace(countsBySeverity(rep.Findings)))
-	fmt.Fprintf(w, "- Module errors: **%d**\n", len(rep.Errors))
+	fmt.Fprintf(w, "- Tool errors: **%d**\n", len(rep.Errors))
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "## Attack Surface")
@@ -54,7 +54,7 @@ func WriteMarkdown(w io.Writer, rep Report) error {
 
 	for i, item := range rep.Findings {
 		fmt.Fprintf(w, "### %d. [%s] %s\n\n", i+1, item.Severity, item.Title)
-		fmt.Fprintf(w, "- **Module:** `%s`\n", item.Module)
+		fmt.Fprintf(w, "- **Tool:** `%s`\n", item.Module)
 
 		if item.CVSS > 0 {
 			fmt.Fprintf(w, "- **CVSS:** `%.1f`\n", item.CVSS)

@@ -10,13 +10,13 @@ import (
 )
 
 // Config holds every option that drives a scan. It is built once from the CLI
-// and passed (read-only) to each module.
+// and passed (read-only) to each tool.
 type Config struct {
 	Target    string
 	Timeout   time.Duration
 	UserAgent string
 
-	// RateRequests is how many requests the rate-limit module sends.
+	// RateRequests is how many requests the rate-limit tool sends.
 	RateRequests int
 
 	// NVDAPIKey is optional. When set it is sent to the NVD API to raise the

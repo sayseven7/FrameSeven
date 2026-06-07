@@ -36,7 +36,7 @@ func TestRunDiscoversNewEndpoints(t *testing.T) {
 	}
 
 	if findings[0].Module != "crawler" {
-		t.Errorf("module = %q, want crawler", findings[0].Module)
+		t.Errorf("tool = %q, want crawler", findings[0].Module)
 	}
 }
 

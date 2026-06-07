@@ -70,7 +70,7 @@ func TestRunListsTools(t *testing.T) {
 		"bannergrab",
 	} {
 		if !strings.Contains(stdout.String(), name) {
-			t.Errorf("module %q missing from output", name)
+			t.Errorf("tool %q missing from output", name)
 		}
 	}
 }
@@ -134,7 +134,7 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 	}
 
 	if strings.Join(received.SelectedTools, ",") != "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve" {
-		t.Errorf("selected modules = %v", received.SelectedTools)
+		t.Errorf("selected tools = %v", received.SelectedTools)
 	}
 
 	assertReportFiles(t, outputDir)
@@ -272,7 +272,7 @@ func TestRunAcceptsAllTools(t *testing.T) {
 
 	want := "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve,crawler,content,subdomain,ports,nmap,sqlmap,bannergrab"
 	if strings.Join(received.SelectedTools, ",") != want {
-		t.Errorf("selected modules = %v", received.SelectedTools)
+		t.Errorf("selected tools = %v", received.SelectedTools)
 	}
 }
 

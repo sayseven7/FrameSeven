@@ -52,15 +52,15 @@ type scanToolInput struct {
 }
 
 type scanToolOutput struct {
-	Version         string             `json:"version" jsonschema:"framework version"`
-	Target          string             `json:"target" jsonschema:"scanned target"`
-	RequestedTool   string             `json:"requested_tool" jsonschema:"MCP tool requested by the caller"`
-	SelectedTools   []string           `json:"selected_tools" jsonschema:"normalized scanner tools that were executed"`
-	Duration        string             `json:"duration" jsonschema:"scan duration"`
-	FindingsCount   int                `json:"findings_count" jsonschema:"number of findings returned"`
-	ErrorsCount     int                `json:"errors_count" jsonschema:"number of tool errors recorded"`
-	Findings        []findingSummary   `json:"findings" jsonschema:"summarized findings"`
-	Errors          []scanErrorSummary `json:"errors" jsonschema:"tool errors recorded during the scan"`
+	Version       string             `json:"version" jsonschema:"framework version"`
+	Target        string             `json:"target" jsonschema:"scanned target"`
+	RequestedTool string             `json:"requested_tool" jsonschema:"MCP tool requested by the caller"`
+	SelectedTools []string           `json:"selected_tools" jsonschema:"normalized scanner tools that were executed"`
+	Duration      string             `json:"duration" jsonschema:"scan duration"`
+	FindingsCount int                `json:"findings_count" jsonschema:"number of findings returned"`
+	ErrorsCount   int                `json:"errors_count" jsonschema:"number of tool errors recorded"`
+	Findings      []findingSummary   `json:"findings" jsonschema:"summarized findings"`
+	Errors        []scanErrorSummary `json:"errors" jsonschema:"tool errors recorded during the scan"`
 }
 
 type findingSummary struct {
@@ -139,15 +139,15 @@ func V1ScanTool(toolName string) func(context.Context, *mcpsdk.CallToolRequest, 
 
 func buildScanToolOutput(toolName string, selected []string, rep report.Report) scanToolOutput {
 	return scanToolOutput{
-		Version:         rep.SchemaVersion,
-		Target:          rep.Target,
-		RequestedTool:   toolName,
-		SelectedTools:   selected,
-		Duration:        rep.Duration,
-		FindingsCount:   len(rep.Findings),
-		ErrorsCount:     len(rep.Errors),
-		Findings:        summarizeFindings(rep.Findings),
-		Errors:          summarizeErrors(rep.Errors),
+		Version:       rep.SchemaVersion,
+		Target:        rep.Target,
+		RequestedTool: toolName,
+		SelectedTools: selected,
+		Duration:      rep.Duration,
+		FindingsCount: len(rep.Findings),
+		ErrorsCount:   len(rep.Errors),
+		Findings:      summarizeFindings(rep.Findings),
+		Errors:        summarizeErrors(rep.Errors),
 	}
 }
 

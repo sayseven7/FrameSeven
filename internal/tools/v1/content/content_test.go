@@ -30,7 +30,7 @@ func TestRunReportsExistingContentPath(t *testing.T) {
 	}
 
 	if findings[0].Module != "content" {
-		t.Fatalf("module = %q, want content", findings[0].Module)
+		t.Fatalf("tool = %q, want content", findings[0].Module)
 	}
 }
 

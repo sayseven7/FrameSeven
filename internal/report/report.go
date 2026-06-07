@@ -22,7 +22,7 @@ type Report struct {
 	Errors        []ScanErrorV1     `json:"errors,omitempty"`
 }
 
-// ScanErrorV1 records a module that could not complete part of its scan.
+// ScanErrorV1 records a tool that could not complete part of its scan.
 type ScanErrorV1 struct {
 	Module  string `json:"module"`
 	Message string `json:"message"`
@@ -95,7 +95,7 @@ func writeSurface(w io.Writer, s recon.Surface) {
 
 func writeFinding(w io.Writer, n int, f finding.Finding) {
 	fmt.Fprintf(w, "[%d] [%s] %s\n", n, f.Severity, f.Title)
-	fmt.Fprintf(w, "    module: %s", f.Module)
+	fmt.Fprintf(w, "    tool: %s", f.Module)
 
 	if f.CVSS > 0 {
 		fmt.Fprintf(w, " | CVSS: %.1f", f.CVSS)

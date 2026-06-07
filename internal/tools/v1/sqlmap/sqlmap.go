@@ -47,7 +47,7 @@ func notFound(name string) finding.Finding {
 		},
 		NextSteps: []string{
 			"Install the external tool before enabling execution support.",
-			"Keep this module selected only when external tooling is needed.",
+			"Keep this tool selected only when external tooling is needed.",
 		},
 	}
 }

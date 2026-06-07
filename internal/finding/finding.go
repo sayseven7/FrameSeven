@@ -31,7 +31,7 @@ func (s Severity) Rank() int {
 }
 
 // Evidence is the proof attached to a finding: the raw request and response
-// that triggered it, plus any concrete value the module managed to extract
+// that triggered it, plus any concrete value the tool managed to extract
 // (for example a database version or a leaked credential).
 type Evidence struct {
 	Request   string `json:"request,omitempty"`
@@ -39,7 +39,7 @@ type Evidence struct {
 	Extracted string `json:"extracted,omitempty"`
 }
 
-// Finding is a single issue reported by a module.
+// Finding is a single issue reported by a tool.
 type Finding struct {
 	Title       string   `json:"title"`
 	Module      string   `json:"module"`
@@ -53,7 +53,7 @@ type Finding struct {
 }
 
 // SortBySeverity orders findings from most to least severe in place. Findings
-// with equal severity keep a stable order by module then title.
+// with equal severity keep a stable order by tool then title.
 func SortBySeverity(findings []Finding) {
 	for i := 1; i < len(findings); i++ {
 		for j := i; j > 0 && less(findings[j], findings[j-1]); j-- {

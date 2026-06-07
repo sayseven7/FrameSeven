@@ -1,6 +1,6 @@
 // Package recon maps the attack surface of a target: DNS, response headers,
 // technologies in use, sensitive files, and reachable endpoints/parameters.
-// Its Surface output feeds every other scanner module.
+// Its Surface output feeds every other scanner tool.
 package recon
 
 import (
@@ -39,7 +39,7 @@ type DNSInfo struct {
 	TXT   []string `json:"txt,omitempty"`
 }
 
-// Surface is the mapped attack surface, shared with the test modules.
+// Surface is the mapped attack surface, shared with the test tools.
 type Surface struct {
 	BaseURL        string            `json:"base_url"`
 	Host           string            `json:"host"`
@@ -357,7 +357,7 @@ func technologyFinding(techs []Technology, requestDump string) finding.Finding {
 		},
 		NextSteps: []string{
 			"Strip or obfuscate version banners (Server, X-Powered-By, generator).",
-			"Feed the detected versions into the CVE module to check for known issues.",
+			"Feed the detected versions into the CVE tool to check for known issues.",
 		},
 	}
 }

@@ -77,7 +77,7 @@ func Run(cfg *config.Config, client *http.Client, _ *recon.Surface) []finding.Fi
 			Extracted: strings.Join(found, "\n"),
 		},
 		NextSteps: []string{
-			"Review discovered paths and feed relevant endpoints into targeted modules.",
+			"Review discovered paths and feed relevant endpoints into targeted tools.",
 			"Add soft-404 detection before increasing the content wordlist.",
 		},
 	}}

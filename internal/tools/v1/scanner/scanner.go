@@ -202,7 +202,7 @@ func selectedTools(names []string) map[string]bool {
 }
 
 // newClient builds the shared HTTP client. TLS verification is disabled so the
-// scan can reach targets with invalid certificates; the misconfig module
+// scan can reach targets with invalid certificates; the misconfig tool
 // reports certificate problems separately.
 func newClient(cfg *config.Config, recorder *requestErrorRecorder) *http.Client {
 	transport := &http.Transport{

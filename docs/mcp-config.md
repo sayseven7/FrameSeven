@@ -18,7 +18,7 @@ The endpoint will be available at:
 http://127.0.0.1:8080/mcp
 ```
 
-Do not expose this server to the internet without access control — module tools
+Do not expose this server to the internet without access control — scanner tools
 send active security probes to targets.
 
 ## Debugging with MCP Inspector

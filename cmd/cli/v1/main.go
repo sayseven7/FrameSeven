@@ -48,8 +48,8 @@ type options struct {
 	quiet       bool
 	verbose     bool
 	version     bool
-	listTools bool
-	tools     []string
+	listTools   bool
+	tools       []string
 }
 
 func main() {
@@ -145,7 +145,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 	cfg.Logger.Printf("INFO  scan log: %s", filepath.Join(opts.outputDir, "scan.log"))
 
 	if len(rep.Errors) > 0 {
-		cfg.Logger.Printf("WARN  scan finished with %d recorded module error(s)", len(rep.Errors))
+		cfg.Logger.Printf("WARN  scan finished with %d recorded tool error(s)", len(rep.Errors))
 		return 1
 	}
 

@@ -345,10 +345,10 @@ footer { margin-top: 48px; color: var(--subtle); font-size: 12px; text-align: ce
       <div><h2>Executive overview</h2><p>Assessment outcome and risk distribution.</p></div>
     </div>
     <div class="metrics">
-      <div class="metric"><span class="metric-label">Total findings</span><strong class="metric-value">{{len .Findings}}</strong><span class="metric-note">Across all completed modules</span></div>
+      <div class="metric"><span class="metric-label">Total findings</span><strong class="metric-value">{{len .Findings}}</strong><span class="metric-note">Across all completed tools</span></div>
       <div class="metric"><span class="metric-label">Critical and high</span><strong class="metric-value">{{sum (index .Counts "CRITICAL") (index .Counts "HIGH")}}</strong><span class="metric-note">Combined urgent findings</span></div>
       <div class="metric"><span class="metric-label">Mapped endpoints</span><strong class="metric-value">{{len .Surface.Endpoints}}</strong><span class="metric-note">Discovered during reconnaissance</span></div>
-      <div class="metric"><span class="metric-label">Module errors</span><strong class="metric-value">{{len .Errors}}</strong><span class="metric-note">May affect report completeness</span></div>
+      <div class="metric"><span class="metric-label">Tool errors</span><strong class="metric-value">{{len .Errors}}</strong><span class="metric-note">May affect report completeness</span></div>
     </div>
     <div class="overview-grid">
       <div class="panel">
@@ -408,7 +408,7 @@ footer { margin-top: 48px; color: var(--subtle); font-size: 12px; text-align: ce
   {{if .Errors}}
   <section class="section" id="errors">
     <div class="section-heading">
-      <div><h2>Scan errors</h2><p>Modules or requests that did not complete successfully.</p></div>
+      <div><h2>Scan errors</h2><p>Tools or requests that did not complete successfully.</p></div>
     </div>
     <div class="panel"><div class="panel-body"><ul class="errors">{{range .Errors}}<li><strong>{{.Module}}</strong><br>{{.Message}}</li>{{end}}</ul></div></div>
   </section>
