@@ -48,8 +48,8 @@ type options struct {
 	quiet       bool
 	verbose     bool
 	version     bool
-	listModules bool
-	modules     []string
+	listTools bool
+	tools     []string
 }
 
 func main() {
@@ -74,8 +74,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 		return 0
 	}
 
-	if opts.listModules {
-		writeModules(stdout)
+	if opts.listTools {
+		writeTools(stdout)
 		return 0
 	}
 
@@ -99,7 +99,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 	cfg.RateRequests = opts.rate
 	cfg.UserAgent = opts.userAgent
 	cfg.NVDAPIKey = os.Getenv("NVD_API_KEY")
-	cfg.SelectedModules = opts.modules
+	cfg.SelectedTools = opts.tools
 
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)
@@ -127,7 +127,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 	cfg.Logger.Printf("INFO  %s", bannerTitle)
 	cfg.Logger.Printf("INFO  scan started for %s", cfg.Target)
 	cfg.Logger.Printf("INFO  output directory: %s", opts.outputDir)
-	cfg.Logger.Printf("INFO  selected modules: %s", strings.Join(cfg.SelectedModules, ", "))
+	cfg.Logger.Printf("INFO  selected tools: %s", strings.Join(cfg.SelectedTools, ", "))
 
 	rep := scan(&cfg)
 
@@ -172,11 +172,10 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.BoolVar(&opts.verbose, "verbose", false, "show HTTP request and response debug logs")
 	flags.BoolVar(&opts.verbose, "v", false, "show HTTP request and response debug logs")
 	flags.BoolVar(&opts.version, "version", false, "show the installed version")
-	flags.BoolVar(&opts.listModules, "list-modules", false, "list scanner modules")
+	flags.BoolVar(&opts.listTools, "list-tools", false, "list scanner tools")
 
-	var moduleList string
-	flags.StringVar(&moduleList, "modules", "", "comma-separated scanner modules to run, default, or all")
-	flags.StringVar(&moduleList, "tools", "", "comma-separated scanner modules to run, default, or all")
+	var toolList string
+	flags.StringVar(&toolList, "tools", "", "comma-separated scanner tools to run, default, or all")
 
 	flags.Usage = func() {
 		writeBanner(stderr)
@@ -197,14 +196,14 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return options{}, err
 	}
 
-	modules, err := parseModuleList(moduleList)
+	toolNames, err := parseToolList(toolList)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)
 
 		return options{}, err
 	}
 
-	opts.modules = modules
+	opts.tools = toolNames
 
 	return opts, nil
 }
@@ -221,7 +220,7 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 	opts.rate = promptInt(reader, output, "Rate-limit request count", opts.rate)
 	opts.userAgent = prompt(reader, output, "User-Agent", opts.userAgent)
 	opts.outputDir = prompt(reader, output, "Output directory", opts.outputDir)
-	opts.modules = promptModules(reader, output, opts.modules)
+	opts.tools = promptTools(reader, output, opts.tools)
 
 	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Scan configuration")
@@ -230,7 +229,7 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 	fmt.Fprintf(output, "  Rate count: %d\n", opts.rate)
 	fmt.Fprintf(output, "  User-Agent: %s\n", opts.userAgent)
 	fmt.Fprintf(output, "  Output:     %s\n", opts.outputDir)
-	fmt.Fprintf(output, "  Modules:    %s\n", strings.Join(opts.modules, ", "))
+	fmt.Fprintf(output, "  Tools:    %s\n", strings.Join(opts.tools, ", "))
 
 	if opts.yes {
 		return opts, true
@@ -288,7 +287,7 @@ func promptInt(reader *bufio.Reader, output io.Writer, label string, defaultValu
 	}
 }
 
-func promptModules(reader *bufio.Reader, output io.Writer, current []string) []string {
+func promptTools(reader *bufio.Reader, output io.Writer, current []string) []string {
 	defaultValue := "default"
 	if len(current) > 0 {
 		defaultValue = strings.Join(current, ",")
@@ -296,13 +295,13 @@ func promptModules(reader *bufio.Reader, output io.Writer, current []string) []s
 
 	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Available tools")
-	for i, module := range scanner.Modules {
-		fmt.Fprintf(output, "  %d) %-10s %s\n", i+1, module.Name, module.Description)
+	for i, tool := range scanner.Tools {
+		fmt.Fprintf(output, "  %d) %-10s %s\n", i+1, tool.Name, tool.Description)
 	}
 
 	for {
 		value := prompt(reader, output, "Tools to run (numbers or names, comma-separated)", defaultValue)
-		selected, err := parseModuleList(value)
+		selected, err := parseToolList(value)
 		if err == nil {
 			return selected
 		}
@@ -311,11 +310,11 @@ func promptModules(reader *bufio.Reader, output io.Writer, current []string) []s
 	}
 }
 
-func writeModules(output io.Writer) {
-	fmt.Fprintln(output, "Framework modules v1")
+func writeTools(output io.Writer) {
+	fmt.Fprintln(output, "Framework tools v1")
 
-	for _, module := range scanner.Modules {
-		fmt.Fprintf(output, "  %-10s %s\n", module.Name, module.Description)
+	for _, tool := range scanner.Tools {
+		fmt.Fprintf(output, "  %-10s %s\n", tool.Name, tool.Description)
 	}
 }
 
@@ -323,20 +322,20 @@ func writeBanner(output io.Writer) {
 	fmt.Fprint(output, cliBanner)
 }
 
-func parseModuleList(value string) ([]string, error) {
+func parseToolList(value string) ([]string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" || strings.EqualFold(value, "default") {
-		return scanner.NormalizeModules(nil)
+		return scanner.NormalizeTools(nil)
 	}
 
 	if strings.EqualFold(value, "all") {
-		return scanner.NormalizeModules(scanner.ModuleNames())
+		return scanner.NormalizeTools(scanner.ToolNames())
 	}
 
 	byName := map[string]string{}
-	for i, module := range scanner.Modules {
-		byName[module.Name] = module.Name
-		byName[strconv.Itoa(i+1)] = module.Name
+	for i, tool := range scanner.Tools {
+		byName[tool.Name] = tool.Name
+		byName[strconv.Itoa(i+1)] = tool.Name
 	}
 
 	seen := map[string]bool{}
@@ -352,7 +351,7 @@ func parseModuleList(value string) ([]string, error) {
 
 		name, ok := byName[part]
 		if !ok {
-			return nil, fmt.Errorf("unknown scanner module %q", part)
+			return nil, fmt.Errorf("unknown scanner tool %q", part)
 		}
 
 		if !seen[name] {
@@ -362,10 +361,10 @@ func parseModuleList(value string) ([]string, error) {
 	}
 
 	if len(selected) == 0 {
-		return nil, errors.New("at least one scanner module must be selected")
+		return nil, errors.New("at least one scanner tool must be selected")
 	}
 
-	return scanner.NormalizeModules(selected)
+	return scanner.NormalizeTools(selected)
 }
 
 func isTerminal(file *os.File) bool {

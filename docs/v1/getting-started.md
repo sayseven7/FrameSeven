@@ -18,7 +18,7 @@ For scripts and repeatable commands, provide the target directly:
 frameseven -url https://target.example
 ```
 
-The command writes a human-readable summary to standard output, module
+The command writes a human-readable summary to standard output, tool
 progress to standard error, and persistent results to `./reports`.
 
 ## Generated Reports
@@ -48,7 +48,7 @@ Set `Config.Verbose` to include request-level HTTP diagnostics.
 
 ## NVD API Key
 
-The CVE module can query the NVD API without a key, but a key raises the API
+The CVE tool can query the NVD API without a key, but a key raises the API
 rate limit.
 
 ```bash
@@ -57,7 +57,7 @@ NVD_API_KEY=your-key frameseven -url https://target.example
 
 ## Framework v1 Scan Pipeline
 
-Framework v1 runs selected modules in this order. The first eight modules are selected by default. The remaining official modules run when selected explicitly or through `-modules all`:
+Framework v1 runs selected tools in this order. The first eight tools are selected by default. The remaining official tools run when selected explicitly or through `-tools all`:
 
 1. `recon`: resolves DNS, fingerprints technologies, discovers endpoints and
    parameters, and probes known sensitive paths.
@@ -85,7 +85,7 @@ Framework v1 runs selected modules in this order. The first eight modules are se
 Use Framework v1 only against systems you are authorized to test.
 
 The current v1 implementation performs active probes. The misconfiguration
-module may send `PUT` and `DELETE` requests, and the SQL injection module may
+tool may send `PUT` and `DELETE` requests, and the SQL injection tool may
 attempt data extraction. These requests can affect application state on an
 unsafe target.
 

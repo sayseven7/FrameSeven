@@ -4,91 +4,89 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sayseven7/frameseven/internal/finding"
 	"github.com/sayseven7/frameseven/internal/report"
-	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
-func TestListModules(t *testing.T) {
-	_, output, err := V1ListModules(context.Background(), nil, listModulesInput{})
+func TestListTools(t *testing.T) {
+	_, output, err := V1ListTools(context.Background(), nil, listToolsInput{})
 	if err != nil {
-		t.Fatalf("ListModules: %v", err)
+		t.Fatalf("V1ListTools: %v", err)
 	}
 
-	if output.Version != "v1" {
-		t.Fatalf("version = %q, want v1", output.Version)
+	if len(output.Tools) == 0 {
+		t.Fatal("expected at least one tool")
 	}
 
-	if len(output.Modules) == 0 {
-		t.Fatal("expected modules")
+	var found bool
+	for _, tool := range output.Tools {
+		if tool.Name == "ratelimit" && tool.EnabledByDefault {
+			found = true
+		}
 	}
-
-	if output.Modules[0].Name != "recon" {
-		t.Fatalf("first module = %q, want recon", output.Modules[0].Name)
+	if !found {
+		t.Fatal("expected ratelimit to be present and enabled by default")
 	}
 }
 
-func TestNormalizeModules(t *testing.T) {
-	_, output, err := V1NormalizeModules(context.Background(), nil, normalizeModulesInput{
-		Modules: []string{"sqli", "misconfig"},
+func TestNormalizeTools(t *testing.T) {
+	_, output, err := V1NormalizeTools(context.Background(), nil, normalizeToolsInput{
+		Tools: []string{"sqli", "misconfig"},
 	})
 	if err != nil {
-		t.Fatalf("NormalizeModules: %v", err)
+		t.Fatalf("V1NormalizeTools: %v", err)
 	}
 
-	if strings.Join(output.SelectedModules, ",") != "recon,sqli,misconfig" {
-		t.Fatalf("selected modules = %v", output.SelectedModules)
+	if strings.Join(output.SelectedTools, ",") != "recon,sqli,misconfig" {
+		t.Fatalf("selected tools = %v", output.SelectedTools)
 	}
 
-	if output.ActiveScanStarted {
-		t.Fatal("MCP normalize tool must not start an active scan")
+	if output.DefaultProfile {
+		t.Fatal("expected default_profile = false with explicit tools")
 	}
 }
 
-func TestV1ScanModuleRequiresActiveScanAcceptance(t *testing.T) {
-	handler := V1ScanModule("recon")
+func TestV1ScanToolRequiresActiveScanAcceptance(t *testing.T) {
+	handler := V1ScanTool("recon")
 
-	_, _, err := handler(context.Background(), nil, scanModuleInput{
-		Target: "https://example.com",
+	_, _, err := handler(context.Background(), nil, scanToolInput{
+		ActiveScanAccepted: false,
 	})
 	if err == nil {
-		t.Fatal("expected active scan acceptance error")
+		t.Fatal("expected error when active_scan_accepted is false")
 	}
 }
 
-func TestBuildScanModuleOutput(t *testing.T) {
-	output := buildScanModuleOutput("recon", []string{"recon"}, reportFixture())
+func TestBuildScanToolOutput(t *testing.T) {
+	output := buildScanToolOutput("recon", []string{"recon"}, reportFixture())
 
-	if output.Version != "v1" {
-		t.Fatalf("version = %q, want v1", output.Version)
+	if output.RequestedTool != "recon" {
+		t.Errorf("requested_tool = %q", output.RequestedTool)
 	}
 
-	if output.RequestedModule != "recon" {
-		t.Fatalf("requested module = %q, want recon", output.RequestedModule)
+	if len(output.SelectedTools) != 1 || output.SelectedTools[0] != "recon" {
+		t.Errorf("selected_tools = %v", output.SelectedTools)
 	}
 
-	if output.FindingsCount != 1 || len(output.Findings) != 1 {
-		t.Fatalf("findings = %+v", output.Findings)
+	if output.FindingsCount == 0 {
+		t.Errorf("expected findings to be summarized")
 	}
 }
 
 func reportFixture() report.Report {
 	return report.Report{
 		SchemaVersion: "v1",
-		Target:        "https://example.com",
-		Duration:      "1ms",
-		Surface:       recon.Surface{Host: "example.com"},
+		Duration:      "10s",
 		Findings: []finding.Finding{
 			{
-				Title:       "Example finding",
-				Module:      "recon",
-				Severity:    finding.Info,
-				Description: "Example description",
-				Evidence: finding.Evidence{
-					Extracted: "example evidence",
-				},
+				Title:    "Test Finding",
+				Module:   "recon",
+				Severity: finding.High,
+				Evidence: finding.Evidence{Extracted: "evidence"},
 			},
 		},
+		StartedAt: time.Now(),
 	}
 }

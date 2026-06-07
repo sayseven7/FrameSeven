@@ -42,11 +42,11 @@ func TestRunHelp(t *testing.T) {
 	}
 }
 
-func TestRunListsModules(t *testing.T) {
+func TestRunListsTools(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := run([]string{"--list-modules"}, strings.NewReader(""), &stdout, &stderr, false, nil)
+	code := run([]string{"--list-tools"}, strings.NewReader(""), &stdout, &stderr, false, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
@@ -133,8 +133,8 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 		t.Errorf("user agent = %q", received.UserAgent)
 	}
 
-	if strings.Join(received.SelectedModules, ",") != "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve" {
-		t.Errorf("selected modules = %v", received.SelectedModules)
+	if strings.Join(received.SelectedTools, ",") != "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve" {
+		t.Errorf("selected modules = %v", received.SelectedTools)
 	}
 
 	assertReportFiles(t, outputDir)
@@ -177,8 +177,8 @@ func TestRunWizardAcceptsCustomValuesWithYesFlag(t *testing.T) {
 		t.Errorf("user agent = %q", received.UserAgent)
 	}
 
-	if strings.Join(received.SelectedModules, ",") != "recon,sqli,lfi" {
-		t.Errorf("selected modules = %v", received.SelectedModules)
+	if strings.Join(received.SelectedTools, ",") != "recon,sqli,lfi" {
+		t.Errorf("selected modules = %v", received.SelectedTools)
 	}
 
 	if strings.Contains(stderr.String(), "scanning") {
@@ -219,14 +219,14 @@ func TestRunWizardCancellationDoesNotScan(t *testing.T) {
 	}
 }
 
-func TestRunAcceptsModuleFlag(t *testing.T) {
+func TestRunAcceptsToolFlag(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	var received config.Config
 	outputDir := t.TempDir()
 
 	code := run(
-		[]string{"-url", "https://example.com", "--out", outputDir, "--modules", "sqli,misconfig", "--quiet"},
+		[]string{"-url", "https://example.com", "--out", outputDir, "--tools", "sqli,misconfig", "--quiet"},
 		strings.NewReader(""),
 		&stdout,
 		&stderr,
@@ -242,19 +242,19 @@ func TestRunAcceptsModuleFlag(t *testing.T) {
 		t.Fatalf("exit code = %d, stderr = %q", code, stderr.String())
 	}
 
-	if strings.Join(received.SelectedModules, ",") != "recon,sqli,misconfig" {
-		t.Errorf("selected modules = %v", received.SelectedModules)
+	if strings.Join(received.SelectedTools, ",") != "recon,sqli,misconfig" {
+		t.Errorf("selected tools = %v", received.SelectedTools)
 	}
 }
 
-func TestRunAcceptsAllModules(t *testing.T) {
+func TestRunAcceptsAllTools(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	var received config.Config
 	outputDir := t.TempDir()
 
 	code := run(
-		[]string{"-url", "https://example.com", "--out", outputDir, "--modules", "all", "--quiet"},
+		[]string{"-url", "https://example.com", "--out", outputDir, "--tools", "all", "--quiet"},
 		strings.NewReader(""),
 		&stdout,
 		&stderr,
@@ -271,8 +271,8 @@ func TestRunAcceptsAllModules(t *testing.T) {
 	}
 
 	want := "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve,crawler,content,subdomain,ports,nmap,sqlmap,bannergrab"
-	if strings.Join(received.SelectedModules, ",") != want {
-		t.Errorf("selected modules = %v", received.SelectedModules)
+	if strings.Join(received.SelectedTools, ",") != want {
+		t.Errorf("selected modules = %v", received.SelectedTools)
 	}
 }
 

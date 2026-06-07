@@ -1,5 +1,5 @@
 // Package scanner orchestrates a full scan: it maps the surface with recon and
-// then runs every test and enrichment module against it, returning a report.
+// then runs every test and enrichment tool against it, returning a report.
 package scanner
 
 import (
@@ -35,30 +35,35 @@ import (
 	"github.com/sayseven7/frameseven/internal/tools/v1/subdomain"
 )
 
-// Module describes one scanner module exposed by Framework v1.
-type Module struct {
+// RunFunc is the common signature for every Framework v1 scanner tool.
+type RunFunc func(*config.Config, *http.Client, *recon.Surface) []finding.Finding
+
+// Tool describes one scanner tool exposed by Framework v1.
+type Tool struct {
 	Name             string
 	Description      string
+	Activity         string
 	EnabledByDefault bool
+	Run              RunFunc
 }
 
-// Modules is the ordered Framework v1 scanner module catalog.
-var Modules = []Module{
-	{"recon", "DNS, technology, endpoint, parameter, and sensitive-file discovery", true},
-	{"sqli", "SQL injection detection and data extraction", true},
-	{"access", "Unauthenticated endpoint, admin path, and IDOR checks", true},
-	{"ssrf", "Internal service and cloud metadata SSRF checks", true},
-	{"lfi", "Local file inclusion and path traversal checks", true},
-	{"misconfig", "Security header, HTTP method, CORS, and TLS checks", true},
-	{"ratelimit", "Request burst and rate-limit behavior checks", true},
-	{"cve", "NVD CVE lookup for detected product versions", true},
-	{"crawler", "Same-origin link and form discovery beyond the landing page", false},
-	{"content", "Common content and directory discovery", false},
-	{"subdomain", "Common DNS subdomain discovery", false},
-	{"ports", "Light TCP checks for common web-facing ports", false},
-	{"nmap", "Nmap integration availability check", false},
-	{"sqlmap", "sqlmap integration availability check", false},
-	{"bannergrab", "FTP, SSH, and SMTP service banner checks", false},
+// Tools is the ordered Framework v1 scanner tool catalog.
+var Tools = []Tool{
+	{Name: "recon", Description: "DNS, technology, endpoint, parameter, and sensitive-file discovery", Activity: "mapping the target attack surface", EnabledByDefault: true, Run: recon.Run},
+	{Name: "sqli", Description: "SQL injection detection and data extraction", Activity: "testing SQL injection vectors", EnabledByDefault: true, Run: sqli.Run},
+	{Name: "access", Description: "Unauthenticated endpoint, admin path, and IDOR checks", Activity: "testing unauthenticated access and IDOR behavior", EnabledByDefault: true, Run: access.Run},
+	{Name: "ssrf", Description: "Internal service and cloud metadata SSRF checks", Activity: "testing server-side request forgery vectors", EnabledByDefault: true, Run: ssrf.Run},
+	{Name: "lfi", Description: "Local file inclusion and path traversal checks", Activity: "testing file inclusion and path traversal vectors", EnabledByDefault: true, Run: lfi.Run},
+	{Name: "misconfig", Description: "Security header, HTTP method, CORS, and TLS checks", Activity: "checking HTTP and TLS configuration", EnabledByDefault: true, Run: misconfig.Run},
+	{Name: "ratelimit", Description: "Request burst and rate-limit behavior checks", Activity: "checking request rate-limit behavior", EnabledByDefault: true, Run: ratelimit.Run},
+	{Name: "cve", Description: "NVD CVE lookup for detected product versions", Activity: "looking up CVEs for detected products", EnabledByDefault: true, Run: cve.Run},
+	{Name: "crawler", Description: "Same-origin link and form discovery beyond the landing page", Activity: "crawling same-origin links discovered by recon", EnabledByDefault: false, Run: crawler.Run},
+	{Name: "content", Description: "Common content and directory discovery", Activity: "checking common content paths", EnabledByDefault: false, Run: content.Run},
+	{Name: "subdomain", Description: "Common DNS subdomain discovery", Activity: "resolving common subdomain candidates", EnabledByDefault: false, Run: subdomain.Run},
+	{Name: "ports", Description: "Light TCP checks for common web-facing ports", Activity: "checking common web-facing TCP ports", EnabledByDefault: false, Run: ports.Run},
+	{Name: "nmap", Description: "Nmap integration availability check", Activity: "checking Nmap integration availability", EnabledByDefault: false, Run: nmap.Run},
+	{Name: "sqlmap", Description: "sqlmap integration availability check", Activity: "checking sqlmap integration availability", EnabledByDefault: false, Run: sqlmap.Run},
+	{Name: "bannergrab", Description: "FTP, SSH, and SMTP service banner checks", Activity: "checking FTP, SSH, and SMTP service banners", EnabledByDefault: false, Run: bannergrab.Run},
 }
 
 // Scan runs the full pipeline and returns a report.
@@ -75,7 +80,7 @@ func Scan(cfg *config.Config) report.Report {
 
 	var findings []finding.Finding
 	var scanErrors []report.ScanErrorV1
-	selected, err := NormalizeModules(cfg.SelectedModules)
+	selected, err := NormalizeTools(cfg.SelectedTools)
 	if err != nil {
 		scanErrors = append(scanErrors, report.ScanErrorV1{
 			Module:  "scanner",
@@ -85,132 +90,20 @@ func Scan(cfg *config.Config) report.Report {
 		return report.New("v1", cfg.Target, started, time.Since(started), recon.Surface{}, findings, scanErrors)
 	}
 
-	enabled := selectedModules(selected)
+	enabled := selectedTools(selected)
+	surface := &recon.Surface{}
 
-	surface := recon.Surface{}
-
-	steps := []moduleStep{
-		{
-			name:     "recon",
-			activity: "mapping the target attack surface",
-			run: func() []finding.Finding {
-				var reconFindings []finding.Finding
-				surface, reconFindings = recon.Run(cfg, client)
-
-				return reconFindings
-			},
-		},
-		{
-			name:     "sqli",
-			activity: "testing SQL injection vectors",
-			run: func() []finding.Finding {
-				return sqli.Run(cfg, client, surface)
-			},
-		},
-		{
-			name:     "access",
-			activity: "testing unauthenticated access and IDOR behavior",
-			run: func() []finding.Finding {
-				return access.Run(cfg, client, surface)
-			},
-		},
-		{
-			name:     "ssrf",
-			activity: "testing server-side request forgery vectors",
-			run: func() []finding.Finding {
-				return ssrf.Run(cfg, client, surface)
-			},
-		},
-		{
-			name:     "lfi",
-			activity: "testing file inclusion and path traversal vectors",
-			run: func() []finding.Finding {
-				return lfi.Run(cfg, client, surface)
-			},
-		},
-		{
-			name:     "misconfig",
-			activity: "checking HTTP and TLS configuration",
-			run: func() []finding.Finding {
-				return misconfig.Run(cfg, client)
-			},
-		},
-		{
-			name:     "ratelimit",
-			activity: "checking request rate-limit behavior",
-			run: func() []finding.Finding {
-				return ratelimit.Run(cfg, client)
-			},
-		},
-		{
-			name:     "cve",
-			activity: "looking up CVEs for detected products",
-			run: func() []finding.Finding {
-				return cve.Run(cfg, client, surface)
-			},
-		},
-		{
-			name:     "crawler",
-			activity: "crawling same-origin links discovered by recon",
-			run: func() []finding.Finding {
-				return crawler.Run(cfg, client, surface)
-			},
-		},
-		{
-			name:     "content",
-			activity: "checking common content paths",
-			run: func() []finding.Finding {
-				return content.Run(cfg, client)
-			},
-		},
-		{
-			name:     "subdomain",
-			activity: "resolving common subdomain candidates",
-			run: func() []finding.Finding {
-				return subdomain.Run(cfg)
-			},
-		},
-		{
-			name:     "ports",
-			activity: "checking common web-facing TCP ports",
-			run: func() []finding.Finding {
-				return ports.Run(cfg)
-			},
-		},
-		{
-			name:     "nmap",
-			activity: "checking Nmap integration availability",
-			run: func() []finding.Finding {
-				return nmap.Run()
-			},
-		},
-		{
-			name:     "sqlmap",
-			activity: "checking sqlmap integration availability",
-			run: func() []finding.Finding {
-				return sqlmap.Run()
-			},
-		},
-		{
-			name:     "bannergrab",
-			activity: "checking FTP, SSH, and SMTP service banners",
-			run: func() []finding.Finding {
-				return bannergrab.Run(cfg)
-			},
-		},
-	}
-
-	for _, step := range steps {
-		if !enabled[step.name] {
+	for _, m := range Tools {
+		if !enabled[m.Name] {
 			continue
 		}
 
-		moduleStarted := startModule(logger, step.name, step.activity)
-		moduleFindings := step.run()
-		findings = append(findings, moduleFindings...)
-		moduleErrors := recorder.Take(step.name)
-		scanErrors = append(scanErrors, moduleErrors...)
-		finishModule(logger, step.name, moduleStarted, len(moduleFindings), len(moduleErrors))
+		toolStarted := startTool(logger, m.Name, m.Activity)
+		toolFindings := m.Run(cfg, client, surface)
+		findings = append(findings, toolFindings...)
+		toolErrors := recorder.Take(m.Name)
+		scanErrors = append(scanErrors, toolErrors...)
+		finishTool(logger, m.Name, toolStarted, len(toolFindings), len(toolErrors))
 	}
 
 	logger.Printf(
@@ -220,47 +113,41 @@ func Scan(cfg *config.Config) report.Report {
 		len(scanErrors),
 	)
 
-	return report.New("v1", cfg.Target, started, time.Since(started), surface, findings, scanErrors)
+	return report.New("v1", cfg.Target, started, time.Since(started), *surface, findings, scanErrors)
 }
 
-type moduleStep struct {
-	name     string
-	activity string
-	run      func() []finding.Finding
-}
-
-// ModuleNames returns every Framework v1 module name in execution order.
-func ModuleNames() []string {
-	names := make([]string, 0, len(Modules))
-	for _, module := range Modules {
-		names = append(names, module.Name)
+// ToolNames returns every Framework v1 tool name in execution order.
+func ToolNames() []string {
+	names := make([]string, 0, len(Tools))
+	for _, tool := range Tools {
+		names = append(names, tool.Name)
 	}
 
 	return names
 }
 
-// DefaultModuleNames returns every Framework v1 module enabled by default.
-func DefaultModuleNames() []string {
+// DefaultToolNames returns every Framework v1 tool enabled by default.
+func DefaultToolNames() []string {
 	var names []string
-	for _, module := range Modules {
-		if module.EnabledByDefault {
-			names = append(names, module.Name)
+	for _, tool := range Tools {
+		if tool.EnabledByDefault {
+			names = append(names, tool.Name)
 		}
 	}
 
 	return names
 }
 
-// NormalizeModules validates module names and includes required dependencies.
-// Empty input means every default Framework v1 module is enabled.
-func NormalizeModules(names []string) ([]string, error) {
+// NormalizeTools validates tool names and includes required dependencies.
+// Empty input means every default Framework v1 tool is enabled.
+func NormalizeTools(names []string) ([]string, error) {
 	if len(names) == 0 {
-		return DefaultModuleNames(), nil
+		return DefaultToolNames(), nil
 	}
 
 	valid := map[string]bool{}
-	for _, module := range Modules {
-		valid[module.Name] = true
+	for _, tool := range Tools {
+		valid[tool.Name] = true
 	}
 
 	seen := map[string]bool{}
@@ -273,7 +160,7 @@ func NormalizeModules(names []string) ([]string, error) {
 		}
 
 		if !valid[name] {
-			return nil, fmt.Errorf("unknown scanner module %q", raw)
+			return nil, fmt.Errorf("unknown scanner tool %q", raw)
 		}
 
 		if !seen[name] {
@@ -283,13 +170,13 @@ func NormalizeModules(names []string) ([]string, error) {
 	}
 
 	if len(selected) == 0 {
-		return nil, errors.New("at least one scanner module must be selected")
+		return nil, errors.New("at least one scanner tool must be selected")
 	}
 
-	return includeRequiredModules(selected), nil
+	return includeRequiredTools(selected), nil
 }
 
-func includeRequiredModules(selected []string) []string {
+func includeRequiredTools(selected []string) []string {
 	needsRecon := false
 	for _, name := range selected {
 		switch name {
@@ -305,7 +192,7 @@ func includeRequiredModules(selected []string) []string {
 	return append([]string{"recon"}, selected...)
 }
 
-func selectedModules(names []string) map[string]bool {
+func selectedTools(names []string) map[string]bool {
 	enabled := map[string]bool{}
 	for _, name := range names {
 		enabled[name] = true
@@ -385,13 +272,13 @@ func (t *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return resp, nil
 }
 
-func startModule(logger *log.Logger, name, activity string) time.Time {
+func startTool(logger *log.Logger, name, activity string) time.Time {
 	logger.Printf("INFO  [%s] started: %s", name, activity)
 
 	return time.Now()
 }
 
-func finishModule(logger *log.Logger, name string, started time.Time, findings, scanErrors int) {
+func finishTool(logger *log.Logger, name string, started time.Time, findings, scanErrors int) {
 	logger.Printf(
 		"INFO  [%s] completed in %s: %d finding(s), %d error(s)",
 		name,

@@ -67,7 +67,7 @@ type nvdMetric struct {
 }
 
 // Run looks up CVEs for every versioned technology in the surface.
-func Run(cfg *config.Config, client *http.Client, surface recon.Surface) []finding.Finding {
+func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
 	var findings []finding.Finding
 	seen := map[string]bool{}
 

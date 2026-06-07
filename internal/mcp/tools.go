@@ -8,19 +8,19 @@ import (
 // RegisterTools adds the FrameSeven MCP tools.
 func RegisterTools(server *mcpsdk.Server) {
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
-		Name:        "frameseven_v1_list_modules",
-		Description: "List Framework v1 scanner modules and whether each module runs by default.",
-	}, V1ListModules)
+		Name:        "frameseven_v1_list_tools",
+		Description: "List Framework v1 scanner tools and whether each tool runs by default.",
+	}, V1ListTools)
 
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
-		Name:        "frameseven_v1_normalize_modules",
-		Description: "Validate and normalize a Framework v1 module selection without starting a scan.",
-	}, V1NormalizeModules)
+		Name:        "frameseven_v1_normalize_tools",
+		Description: "Validate and normalize a Framework v1 tool selection without starting a scan.",
+	}, V1NormalizeTools)
 
-	for _, module := range scanner.Modules {
+	for _, tool := range scanner.Tools {
 		mcpsdk.AddTool(server, &mcpsdk.Tool{
-			Name:        "frameseven_v1_" + module.Name,
-			Description: "Run the Framework v1 " + module.Name + " module. " + module.Description + ".",
-		}, V1ScanModule(module.Name))
+			Name:        "frameseven_v1_" + tool.Name,
+			Description: "Run the Framework v1 " + tool.Name + " tool. " + tool.Description + ".",
+		}, V1ScanTool(tool.Name))
 	}
 }

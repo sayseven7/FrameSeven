@@ -20,7 +20,7 @@ const maxPages = 10
 var linkRe = regexp.MustCompile(`(?i)(?:href|src|action)=["']([^"']+)["']`)
 
 // Run fetches discovered same-origin endpoints and reports new links.
-func Run(cfg *config.Config, client *http.Client, surface recon.Surface) []finding.Finding {
+func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
 	base, err := url.Parse(cfg.Target)
 	if err != nil {
 		return nil

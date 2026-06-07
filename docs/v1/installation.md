@@ -165,7 +165,7 @@ artifact.
 
 ## Optional NVD API Key
 
-The CVE module can use an NVD API key to increase the API request limit:
+The CVE tool can use an NVD API key to increase the API request limit:
 
 ```bash
 export NVD_API_KEY=your-key

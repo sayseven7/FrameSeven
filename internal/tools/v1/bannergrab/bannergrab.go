@@ -3,12 +3,14 @@ package bannergrab
 
 import (
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/sayseven7/frameseven/internal/config"
 	"github.com/sayseven7/frameseven/internal/finding"
+	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
 type service struct {
@@ -53,7 +55,7 @@ var services = []service{
 }
 
 // Run records banners exposed by a small set of common TCP services.
-func Run(cfg *config.Config) []finding.Finding {
+func Run(cfg *config.Config, _ *http.Client, _ *recon.Surface) []finding.Finding {
 	var findings []finding.Finding
 
 	for _, svc := range services {

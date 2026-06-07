@@ -11,7 +11,7 @@ persistent reports to the output directory. The default directory is
 | `report.html` | Styled, self-contained browser report with expandable evidence |
 | `report.md` | Portable human-readable report |
 | `report.json` | Structured CLI output contract v1 |
-| `scan.log` | Module progress and optional request-level debug details |
+| `scan.log` | Tool progress and optional request-level debug details |
 
 Report files use restricted permissions because findings and evidence can
 contain sensitive target data.
@@ -30,7 +30,7 @@ Top-level fields:
 | `duration` | string | Rounded scan duration |
 | `surface` | object | Attack surface collected by reconnaissance |
 | `findings` | array | Findings sorted by severity |
-| `errors` | array | Optional module request errors |
+| `errors` | array | Optional tool request errors |
 
 ## Surface
 
@@ -66,9 +66,9 @@ Each finding can contain:
 The `evidence` object may contain `request`, `response`, and `extracted`
 strings. Empty optional values are omitted from JSON.
 
-## Module Error
+## Tool Error
 
-Errors do not discard successful results from other modules:
+Errors do not discard successful results from other tools:
 
 ```json
 {
@@ -77,7 +77,7 @@ Errors do not discard successful results from other modules:
 }
 ```
 
-A report containing one or more module errors is incomplete, and CLI v1 exits
+A report containing one or more tool errors is incomplete, and CLI v1 exits
 with status `1`.
 
 ## Minimal Example

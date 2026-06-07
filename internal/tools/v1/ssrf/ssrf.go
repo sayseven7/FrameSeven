@@ -37,7 +37,7 @@ type response struct {
 }
 
 // Run injects SSRF payloads into candidate parameters.
-func Run(cfg *config.Config, client *http.Client, surface recon.Surface) []finding.Finding {
+func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
 	var findings []finding.Finding
 	tested := map[string]bool{}
 

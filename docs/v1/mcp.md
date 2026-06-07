@@ -30,7 +30,7 @@ http://127.0.0.1:8080/mcp
 ```
 
 Use `0.0.0.0:8080` only when the server is behind an access-controlled network,
-reverse proxy, tunnel, or firewall rule. Module tools can send active security
+reverse proxy, tunnel, or firewall rule. Scanner tools can send active security
 probes, so do not expose this server openly to the internet.
 
 ## Tool Naming
@@ -46,11 +46,11 @@ frameseven_v1_
 
 Metadata tools:
 
-- `frameseven_v1_list_modules`: lists Framework v1 modules and default status.
-- `frameseven_v1_normalize_modules`: validates and normalizes a module list
+- `frameseven_v1_list_tools`: lists Framework v1 tools and default status.
+- `frameseven_v1_normalize_tools`: validates and normalizes a tool list
   without starting a scan.
 
-Module tools:
+Scanner tools:
 
 - `frameseven_v1_recon`
 - `frameseven_v1_sqli`
@@ -68,12 +68,12 @@ Module tools:
 - `frameseven_v1_sqlmap`
 - `frameseven_v1_bannergrab`
 
-Every module tool requires `active_scan_accepted: true` because it may send
+Every scanner tool requires `active_scan_accepted: true` because it may send
 active security probes to the target.
 
-## Module Tool Input
+## Scanner Tool Input
 
-Module tools accept:
+Scanner tools accept:
 
 ```json
 {
@@ -83,23 +83,23 @@ Module tools accept:
   "rate_requests": 50,
   "user_agent": "frameseven/v1",
   "nvd_api_key": "",
-  "extra_modules": []
+  "extra_tools": []
 }
 ```
 
 ## Output
 
-Module tools return a summarized report containing:
+Scanner tools return a summarized report containing:
 
 - framework version
 - target
-- requested module
-- selected modules
+- requested tool
+- selected tools
 - duration
 - finding count
 - error count
 - summarized findings
-- module errors
+- tool errors
 
 Use the CLI report files when a full HTML, Markdown, or JSON scan report is
 needed.

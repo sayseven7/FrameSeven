@@ -69,18 +69,16 @@ var sensitiveFiles = map[string]string{
 	"/server-status":     "Apache Server Status",
 }
 
-// Run maps the surface of the target.
-func Run(cfg *config.Config, client *http.Client) (Surface, []finding.Finding) {
-	surface := Surface{
-		BaseURL: cfg.Target,
-		Headers: map[string]string{},
-	}
+// Run maps the surface of the target and populates the provided Surface.
+func Run(cfg *config.Config, client *http.Client, surface *Surface) []finding.Finding {
+	surface.BaseURL = cfg.Target
+	surface.Headers = map[string]string{}
 
 	var findings []finding.Finding
 
 	base, err := url.Parse(cfg.Target)
 	if err != nil {
-		return surface, findings
+		return findings
 	}
 
 	surface.Host = base.Hostname()
@@ -88,7 +86,7 @@ func Run(cfg *config.Config, client *http.Client) (Surface, []finding.Finding) {
 
 	dump, body, resp := fetch(cfg, client, http.MethodGet, cfg.Target)
 	if resp == nil {
-		return surface, findings
+		return findings
 	}
 
 	for name := range resp.Header {
@@ -102,9 +100,9 @@ func Run(cfg *config.Config, client *http.Client) (Surface, []finding.Finding) {
 		findings = append(findings, technologyFinding(surface.Technologies, dump))
 	}
 
-	findings = append(findings, probeSensitiveFiles(cfg, client, base, &surface)...)
+	findings = append(findings, probeSensitiveFiles(cfg, client, base, surface)...)
 
-	return surface, findings
+	return findings
 }
 
 func resolveDNS(host string) DNSInfo {

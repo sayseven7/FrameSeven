@@ -70,7 +70,8 @@ func TestProbeSensitiveFiles(t *testing.T) {
 	cfg := config.New(srv.URL)
 	cfg.Timeout = 5 * time.Second
 
-	_, findings := Run(&cfg, srv.Client())
+	var surface Surface
+	findings := Run(&cfg, srv.Client(), &surface)
 
 	found := map[string]bool{}
 	for _, f := range findings {

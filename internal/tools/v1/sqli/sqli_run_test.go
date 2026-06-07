@@ -40,7 +40,7 @@ func TestRunDetectsBooleanInjection(t *testing.T) {
 		},
 	}
 
-	findings := Run(&cfg, srv.Client(), surface)
+	findings := Run(&cfg, srv.Client(), &surface)
 
 	var found bool
 	for _, f := range findings {
@@ -69,7 +69,7 @@ func TestRunNoInjectionOnStableEndpoint(t *testing.T) {
 		},
 	}
 
-	if findings := Run(&cfg, srv.Client(), surface); len(findings) != 0 {
+	if findings := Run(&cfg, srv.Client(), &surface); len(findings) != 0 {
 		t.Errorf("expected no findings on stable endpoint, got %+v", findings)
 	}
 }

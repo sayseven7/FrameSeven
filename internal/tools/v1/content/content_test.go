@@ -24,7 +24,7 @@ func TestRunReportsExistingContentPath(t *testing.T) {
 	cfg := config.New(srv.URL)
 	cfg.Timeout = 5 * time.Second
 
-	findings := Run(&cfg, srv.Client())
+	findings := Run(&cfg, srv.Client(), nil)
 	if len(findings) != 1 {
 		t.Fatalf("findings = %+v, want one finding", findings)
 	}
@@ -43,7 +43,7 @@ func TestRunSkipsSoft404Responses(t *testing.T) {
 	cfg := config.New(srv.URL)
 	cfg.Timeout = 5 * time.Second
 
-	findings := Run(&cfg, srv.Client())
+	findings := Run(&cfg, srv.Client(), nil)
 	if len(findings) != 0 {
 		t.Fatalf("findings = %+v, want none", findings)
 	}

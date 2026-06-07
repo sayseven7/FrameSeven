@@ -25,7 +25,7 @@ func TestRunFlagsMisconfigurations(t *testing.T) {
 	cfg := config.New(srv.URL)
 	cfg.Timeout = 5 * time.Second
 
-	findings := Run(&cfg, srv.Client())
+	findings := Run(&cfg, srv.Client(), nil)
 
 	cwes := map[string]bool{}
 	for _, f := range findings {

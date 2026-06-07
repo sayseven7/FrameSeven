@@ -15,6 +15,7 @@ import (
 
 	"github.com/sayseven7/frameseven/internal/config"
 	"github.com/sayseven7/frameseven/internal/finding"
+	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
 // securityHeaders maps a header to a short note on what it protects against.
@@ -30,7 +31,7 @@ var securityHeaders = map[string]string{
 const evilOrigin = "https://evil.example"
 
 // Run performs all configuration checks against the target.
-func Run(cfg *config.Config, client *http.Client) []finding.Finding {
+func Run(cfg *config.Config, client *http.Client, _ *recon.Surface) []finding.Finding {
 	base, err := url.Parse(cfg.Target)
 	if err != nil {
 		return nil

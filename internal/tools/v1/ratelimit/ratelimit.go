@@ -13,11 +13,12 @@ import (
 
 	"github.com/sayseven7/frameseven/internal/config"
 	"github.com/sayseven7/frameseven/internal/finding"
+	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
 // Run sends cfg.RateRequests requests to the target and reports if no
 // throttling is observed.
-func Run(cfg *config.Config, client *http.Client) []finding.Finding {
+func Run(cfg *config.Config, client *http.Client, _ *recon.Surface) []finding.Finding {
 	statuses := map[int]int{}
 	var latencies []time.Duration
 	throttled := false

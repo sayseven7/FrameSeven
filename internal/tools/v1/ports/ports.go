@@ -3,6 +3,7 @@ package ports
 
 import (
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -10,12 +11,13 @@ import (
 
 	"github.com/sayseven7/frameseven/internal/config"
 	"github.com/sayseven7/frameseven/internal/finding"
+	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
 var commonPorts = []int{80, 443, 8000, 8080, 8443, 3000}
 
 // Run checks the target port and common web ports with TCP connect attempts.
-func Run(cfg *config.Config) []finding.Finding {
+func Run(cfg *config.Config, _ *http.Client, _ *recon.Surface) []finding.Finding {
 	base, err := url.Parse(cfg.Target)
 	if err != nil {
 		return nil

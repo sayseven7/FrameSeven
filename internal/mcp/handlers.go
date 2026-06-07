@@ -15,52 +15,52 @@ import (
 	"github.com/sayseven7/frameseven/internal/tools/v1/scanner"
 )
 
-type listModulesInput struct{}
+type listToolsInput struct{}
 
-type moduleInfo struct {
-	Name             string `json:"name" jsonschema:"scanner module name"`
-	Description      string `json:"description" jsonschema:"short scanner module description"`
-	EnabledByDefault bool   `json:"enabled_by_default" jsonschema:"whether this module runs in the default scan profile"`
+type toolInfo struct {
+	Name             string `json:"name" jsonschema:"scanner tool name"`
+	Description      string `json:"description" jsonschema:"short scanner tool description"`
+	EnabledByDefault bool   `json:"enabled_by_default" jsonschema:"whether this tool runs in the default scan profile"`
 }
 
-type listModulesOutput struct {
-	Version string       `json:"version" jsonschema:"framework version"`
-	Modules []moduleInfo `json:"modules" jsonschema:"available Framework v1 scanner modules"`
+type listToolsOutput struct {
+	Version string     `json:"version" jsonschema:"framework version"`
+	Tools   []toolInfo `json:"tools" jsonschema:"available Framework v1 scanner tools"`
 }
 
-type normalizeModulesInput struct {
-	Modules []string `json:"modules" jsonschema:"module names to validate; empty means the default module set"`
+type normalizeToolsInput struct {
+	Tools []string `json:"tools" jsonschema:"tool names to validate; empty means the default tool set"`
 }
 
-type normalizeModulesOutput struct {
+type normalizeToolsOutput struct {
 	Version           string   `json:"version" jsonschema:"framework version"`
-	SelectedModules   []string `json:"selected_modules" jsonschema:"normalized module names in execution order"`
+	SelectedTools     []string `json:"selected_tools" jsonschema:"normalized tool names in execution order"`
 	DefaultProfile    bool     `json:"default_profile" jsonschema:"whether the input resolved to the default scan profile"`
-	SelectionSummary  string   `json:"selection_summary" jsonschema:"human-readable module selection summary"`
-	AvailableModules  []string `json:"available_modules" jsonschema:"all available Framework v1 module names"`
+	SelectionSummary  string   `json:"selection_summary" jsonschema:"human-readable tool selection summary"`
+	AvailableTools    []string `json:"available_tools" jsonschema:"all available Framework v1 tool names"`
 	ActiveScanStarted bool     `json:"active_scan_started" jsonschema:"always false for this introductory MCP tool"`
 }
 
-type scanModuleInput struct {
+type scanToolInput struct {
 	Target             string   `json:"target" jsonschema:"authorized HTTP or HTTPS target URL"`
 	TimeoutSeconds     int      `json:"timeout_seconds" jsonschema:"per-request timeout in seconds; uses the project default when empty"`
-	RateRequests       int      `json:"rate_requests" jsonschema:"requests sent by the rate-limit module; uses the project default when empty"`
+	RateRequests       int      `json:"rate_requests" jsonschema:"requests sent by the rate-limit tool; uses the project default when empty"`
 	UserAgent          string   `json:"user_agent" jsonschema:"User-Agent header; uses the project default when empty"`
 	NVDAPIKey          string   `json:"nvd_api_key" jsonschema:"optional NVD API key for CVE lookups"`
 	ActiveScanAccepted bool     `json:"active_scan_accepted" jsonschema:"must be true to confirm this tool may send active security probes to the target"`
-	ExtraModules       []string `json:"extra_modules" jsonschema:"optional additional Framework v1 modules to run with this module"`
+	ExtraTools         []string `json:"extra_tools" jsonschema:"optional additional Framework v1 tools to run with this tool"`
 }
 
-type scanModuleOutput struct {
+type scanToolOutput struct {
 	Version         string             `json:"version" jsonschema:"framework version"`
 	Target          string             `json:"target" jsonschema:"scanned target"`
-	RequestedModule string             `json:"requested_module" jsonschema:"MCP tool module requested by the caller"`
-	SelectedModules []string           `json:"selected_modules" jsonschema:"normalized scanner modules that were executed"`
+	RequestedTool   string             `json:"requested_tool" jsonschema:"MCP tool requested by the caller"`
+	SelectedTools   []string           `json:"selected_tools" jsonschema:"normalized scanner tools that were executed"`
 	Duration        string             `json:"duration" jsonschema:"scan duration"`
 	FindingsCount   int                `json:"findings_count" jsonschema:"number of findings returned"`
-	ErrorsCount     int                `json:"errors_count" jsonschema:"number of module errors recorded"`
+	ErrorsCount     int                `json:"errors_count" jsonschema:"number of tool errors recorded"`
 	Findings        []findingSummary   `json:"findings" jsonschema:"summarized findings"`
-	Errors          []scanErrorSummary `json:"errors" jsonschema:"module errors recorded during the scan"`
+	Errors          []scanErrorSummary `json:"errors" jsonschema:"tool errors recorded during the scan"`
 }
 
 type findingSummary struct {
@@ -80,69 +80,69 @@ type scanErrorSummary struct {
 	Message string `json:"message" jsonschema:"error message"`
 }
 
-// ListModules returns the Framework v1 module catalog.
-func V1ListModules(ctx context.Context, req *mcpsdk.CallToolRequest, input listModulesInput) (*mcpsdk.CallToolResult, listModulesOutput, error) {
-	var modules []moduleInfo
-	for _, module := range scanner.Modules {
-		modules = append(modules, moduleInfo{
-			Name:             module.Name,
-			Description:      module.Description,
-			EnabledByDefault: module.EnabledByDefault,
+// V1ListTools returns the Framework v1 tool catalog.
+func V1ListTools(ctx context.Context, req *mcpsdk.CallToolRequest, input listToolsInput) (*mcpsdk.CallToolResult, listToolsOutput, error) {
+	var tools []toolInfo
+	for _, tool := range scanner.Tools {
+		tools = append(tools, toolInfo{
+			Name:             tool.Name,
+			Description:      tool.Description,
+			EnabledByDefault: tool.EnabledByDefault,
 		})
 	}
 
-	return nil, listModulesOutput{
+	return nil, listToolsOutput{
 		Version: "v1",
-		Modules: modules,
+		Tools:   tools,
 	}, nil
 }
 
-// NormalizeModules validates a module selection without running any scanner module.
-func V1NormalizeModules(ctx context.Context, req *mcpsdk.CallToolRequest, input normalizeModulesInput) (*mcpsdk.CallToolResult, normalizeModulesOutput, error) {
-	selected, err := scanner.NormalizeModules(input.Modules)
+// V1NormalizeTools validates a tool selection without running any scanner tool.
+func V1NormalizeTools(ctx context.Context, req *mcpsdk.CallToolRequest, input normalizeToolsInput) (*mcpsdk.CallToolResult, normalizeToolsOutput, error) {
+	selected, err := scanner.NormalizeTools(input.Tools)
 	if err != nil {
-		return nil, normalizeModulesOutput{}, err
+		return nil, normalizeToolsOutput{}, err
 	}
 
-	return nil, normalizeModulesOutput{
+	return nil, normalizeToolsOutput{
 		Version:           "v1",
-		SelectedModules:   selected,
-		DefaultProfile:    len(input.Modules) == 0,
+		SelectedTools:     selected,
+		DefaultProfile:    len(input.Tools) == 0,
 		SelectionSummary:  strings.Join(selected, ", "),
-		AvailableModules:  scanner.ModuleNames(),
+		AvailableTools:    scanner.ToolNames(),
 		ActiveScanStarted: false,
 	}, nil
 }
 
-// V1ScanModule returns an MCP handler for one Framework v1 scanner module.
-func V1ScanModule(moduleName string) func(context.Context, *mcpsdk.CallToolRequest, scanModuleInput) (*mcpsdk.CallToolResult, scanModuleOutput, error) {
-	return func(ctx context.Context, req *mcpsdk.CallToolRequest, input scanModuleInput) (*mcpsdk.CallToolResult, scanModuleOutput, error) {
+// V1ScanTool returns an MCP handler for one Framework v1 scanner tool.
+func V1ScanTool(toolName string) func(context.Context, *mcpsdk.CallToolRequest, scanToolInput) (*mcpsdk.CallToolResult, scanToolOutput, error) {
+	return func(ctx context.Context, req *mcpsdk.CallToolRequest, input scanToolInput) (*mcpsdk.CallToolResult, scanToolOutput, error) {
 		if !input.ActiveScanAccepted {
-			return nil, scanModuleOutput{}, errors.New("active_scan_accepted must be true before running scanner modules")
+			return nil, scanToolOutput{}, errors.New("active_scan_accepted must be true before running scanner tools")
 		}
 
-		selected, err := scanner.NormalizeModules(append([]string{moduleName}, input.ExtraModules...))
+		selected, err := scanner.NormalizeTools(append([]string{toolName}, input.ExtraTools...))
 		if err != nil {
-			return nil, scanModuleOutput{}, err
+			return nil, scanToolOutput{}, err
 		}
 
 		cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.RateRequests, input.UserAgent, input.NVDAPIKey)
 		if err := cfg.Validate(); err != nil {
-			return nil, scanModuleOutput{}, err
+			return nil, scanToolOutput{}, err
 		}
 
 		rep := scanner.Scan(&cfg)
 
-		return nil, buildScanModuleOutput(moduleName, selected, rep), nil
+		return nil, buildScanToolOutput(toolName, selected, rep), nil
 	}
 }
 
-func buildScanModuleOutput(moduleName string, selected []string, rep report.Report) scanModuleOutput {
-	return scanModuleOutput{
+func buildScanToolOutput(toolName string, selected []string, rep report.Report) scanToolOutput {
+	return scanToolOutput{
 		Version:         rep.SchemaVersion,
 		Target:          rep.Target,
-		RequestedModule: moduleName,
-		SelectedModules: selected,
+		RequestedTool:   toolName,
+		SelectedTools:   selected,
 		Duration:        rep.Duration,
 		FindingsCount:   len(rep.Findings),
 		ErrorsCount:     len(rep.Errors),
@@ -153,7 +153,7 @@ func buildScanModuleOutput(moduleName string, selected []string, rep report.Repo
 
 func buildScanConfig(target string, selected []string, timeoutSeconds, rateRequests int, userAgent, nvdAPIKey string) config.Config {
 	cfg := config.New(target)
-	cfg.SelectedModules = selected
+	cfg.SelectedTools = selected
 	cfg.Logger = log.New(io.Discard, "", 0)
 
 	if timeoutSeconds > 0 {

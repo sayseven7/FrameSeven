@@ -23,9 +23,9 @@ type Config struct {
 	// request rate limit.
 	NVDAPIKey string
 
-	// SelectedModules limits the scanner to the named framework modules. Empty
-	// means every module is enabled.
-	SelectedModules []string
+	// SelectedTools limits the scanner to the named framework tools. Empty
+	// means every tool is enabled.
+	SelectedTools []string
 
 	// Logger receives scan progress and diagnostic messages.
 	Logger *log.Logger

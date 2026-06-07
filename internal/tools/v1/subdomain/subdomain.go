@@ -3,11 +3,13 @@ package subdomain
 
 import (
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/sayseven7/frameseven/internal/config"
 	"github.com/sayseven7/frameseven/internal/finding"
+	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
 var candidates = []string{
@@ -146,7 +148,7 @@ var candidates = []string{
 }
 
 // Run resolves common subdomain candidates and reports any that exist.
-func Run(cfg *config.Config) []finding.Finding {
+func Run(cfg *config.Config, _ *http.Client, _ *recon.Surface) []finding.Finding {
 	base, err := url.Parse(cfg.Target)
 	if err != nil {
 		return nil

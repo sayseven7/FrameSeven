@@ -48,7 +48,7 @@ func TestRunUnauthAndIDOR(t *testing.T) {
 		},
 	}
 
-	findings := Run(&cfg, srv.Client(), surface)
+	findings := Run(&cfg, srv.Client(), &surface)
 
 	var unauth, idor bool
 	for _, f := range findings {
@@ -84,7 +84,7 @@ func TestRunReportsProtectedAdminCandidate(t *testing.T) {
 	cfg := config.New(srv.URL)
 	cfg.Timeout = 5 * time.Second
 
-	findings := Run(&cfg, srv.Client(), recon.Surface{})
+	findings := Run(&cfg, srv.Client(), &recon.Surface{})
 
 	for _, f := range findings {
 		if f.Title == "Administrative interface candidate discovered: /admin" {
@@ -110,7 +110,7 @@ func TestRunNoIDORForNonNumeric(t *testing.T) {
 		},
 	}
 
-	for _, f := range Run(&cfg, srv.Client(), surface) {
+	for _, f := range Run(&cfg, srv.Client(), &surface) {
 		if f.CWE == "CWE-639" {
 			t.Errorf("did not expect IDOR finding for non-numeric parameter")
 		}

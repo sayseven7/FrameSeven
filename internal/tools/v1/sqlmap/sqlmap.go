@@ -2,13 +2,16 @@
 package sqlmap
 
 import (
+	"net/http"
 	"os/exec"
 
+	"github.com/sayseven7/frameseven/internal/config"
 	"github.com/sayseven7/frameseven/internal/finding"
+	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
 // Run reports whether the sqlmap binary is available. It does not execute sqlmap.
-func Run() []finding.Finding {
+func Run(_ *config.Config, _ *http.Client, _ *recon.Surface) []finding.Finding {
 	path, err := exec.LookPath("sqlmap")
 	if err != nil {
 		return []finding.Finding{notFound("sqlmap")}

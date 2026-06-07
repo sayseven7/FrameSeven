@@ -41,7 +41,7 @@ type response struct {
 }
 
 // Run probes unauthenticated access and IDOR.
-func Run(cfg *config.Config, client *http.Client, surface recon.Surface) []finding.Finding {
+func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
 	base, err := url.Parse(cfg.Target)
 	if err != nil {
 		return nil
@@ -115,7 +115,7 @@ func unauthEndpoints(cfg *config.Config, client *http.Client, base *url.URL) []f
 
 var idRe = regexp.MustCompile(`^\d+$`)
 
-func idor(cfg *config.Config, client *http.Client, surface recon.Surface) []finding.Finding {
+func idor(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
 	var findings []finding.Finding
 	tested := map[string]bool{}
 

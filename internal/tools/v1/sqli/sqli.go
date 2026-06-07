@@ -116,7 +116,7 @@ var profiles = []dbProfile{
 }
 
 // Run tests every discovered GET parameter for SQL injection.
-func Run(cfg *config.Config, client *http.Client, surface recon.Surface) []finding.Finding {
+func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
 	var findings []finding.Finding
 	tested := map[string]bool{}
 

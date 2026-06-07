@@ -26,17 +26,16 @@ For a development build that has not been installed:
 |---|---:|---|
 | `-url` | required | Absolute HTTP or HTTPS target URL |
 | `-timeout` | `10s` | Timeout applied to each HTTP request |
-| `-rate` | `50` | Requests sent by the rate-limit module |
+| `-rate` | `50` | Requests sent by the rate-limit tool |
 | `-ua` | `frameseven/v1` | User-Agent header sent by the scanner |
 | `-out`, `-o` | `reports` | Directory for generated reports and the scan log |
 | `-interactive`, `-i` | disabled | Configure the scan with an interactive wizard |
 | `-yes`, `-y` | disabled | Skip the wizard's final confirmation |
 | `-quiet`, `-q` | disabled | Hide banner and progress messages |
 | `-verbose`, `-v` | disabled | Include HTTP request, response, duration, and error debug logs |
-| `-modules` | `default` | Comma-separated Framework v1 modules to run, `default`, or `all` |
-| `-tools` | `default` | Alias for `-modules` |
+| `-tools` | `default` | Comma-separated Framework v1 tools to run, `default`, or `all` |
 | `-version` | disabled | Print the installed build version |
-| `-list-modules` | disabled | List all Framework v1 scanner modules |
+| `-list-tools` | disabled | List all Framework v1 scanner tools |
 
 The target must include the scheme and host:
 
@@ -76,7 +75,7 @@ terminal.
 
 | Variable | Required | Description |
 |---|---|---|
-| `NVD_API_KEY` | No | NVD API key used by the CVE enrichment module |
+| `NVD_API_KEY` | No | NVD API key used by the CVE enrichment tool |
 
 ## Examples
 
@@ -113,10 +112,10 @@ frameseven \
   --verbose
 ```
 
-List the modules included in Framework v1:
+List the tools included in Framework v1:
 
 ```bash
-frameseven --list-modules
+frameseven --list-tools
 ```
 
 Run only selected scanner tools:
@@ -124,14 +123,14 @@ Run only selected scanner tools:
 ```bash
 frameseven \
   -url https://target.example \
-  -modules sqli,misconfig
+  -tools sqli,misconfig
 ```
 
 When a selected tool needs the discovered attack surface (`sqli`, `access`,
 `ssrf`, `lfi`, `cve`, or `crawler`), CLI v1 includes `recon` automatically.
 
-`default` runs the core web scanner modules. `all` also includes official opt-in
-enumeration and integration modules: `crawler`, `content`, `subdomain`,
+`default` runs the core web scanner tools. `all` also includes official opt-in
+enumeration and integration tools: `crawler`, `content`, `subdomain`,
 `ports`, `nmap`, `sqlmap`, and `bannergrab`.
 
 Print the installed version:
@@ -144,8 +143,8 @@ frameseven --version
 
 | Code | Meaning |
 |---:|---|
-| `0` | The scan completed without recorded module request errors |
-| `1` | A module recorded a network error, or an output file could not be written |
+| `0` | The scan completed without recorded tool request errors |
+| `1` | A tool recorded a network error, or an output file could not be written |
 | `2` | CLI configuration or flag validation failed |
 
 Exit code `0` does not mean the target has no findings. Findings are reported
@@ -156,12 +155,12 @@ independently from command success.
 - TLS certificate verification is disabled so the scanner can inspect targets
   with invalid certificates. Use the scanner only on authorized networks.
 - Cross-origin redirects are blocked.
-- Network failures are attached to the module that was running.
+- Network failures are attached to the tool that was running.
 - Findings are sorted from highest to lowest severity.
 
 ## Progress and Logs
 
-CLI v1 prints the start and completion of every scanner module to standard
+CLI v1 prints the start and completion of every scanner tool to standard
 error. Each completion message includes elapsed time, findings, and recorded
 errors.
 

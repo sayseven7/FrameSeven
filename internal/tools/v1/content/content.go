@@ -12,6 +12,7 @@ import (
 
 	"github.com/sayseven7/frameseven/internal/config"
 	"github.com/sayseven7/frameseven/internal/finding"
+	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
 var paths = []string{
@@ -32,7 +33,7 @@ type response struct {
 }
 
 // Run checks a small official v1 seed list of common content paths.
-func Run(cfg *config.Config, client *http.Client) []finding.Finding {
+func Run(cfg *config.Config, client *http.Client, _ *recon.Surface) []finding.Finding {
 	base, err := url.Parse(cfg.Target)
 	if err != nil {
 		return nil

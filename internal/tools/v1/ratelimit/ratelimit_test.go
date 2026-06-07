@@ -49,7 +49,7 @@ func TestRunReportsMissingRateLimit(t *testing.T) {
 	cfg.Timeout = 5 * time.Second
 	cfg.RateRequests = 5
 
-	findings := Run(&cfg, srv.Client())
+	findings := Run(&cfg, srv.Client(), nil)
 
 	if len(findings) != 1 || findings[0].CWE != "CWE-770" {
 		t.Fatalf("expected one missing-rate-limit finding, got %+v", findings)
@@ -66,7 +66,7 @@ func TestRunSilentWhenThrottled(t *testing.T) {
 	cfg.Timeout = 5 * time.Second
 	cfg.RateRequests = 5
 
-	if findings := Run(&cfg, srv.Client()); len(findings) != 0 {
+	if findings := Run(&cfg, srv.Client(), nil); len(findings) != 0 {
 		t.Errorf("expected no finding when throttled, got %+v", findings)
 	}
 }

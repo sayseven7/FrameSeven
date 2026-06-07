@@ -114,7 +114,7 @@ func TestScanProducesReport(t *testing.T) {
 	}
 }
 
-func TestScanRunsOnlySelectedModules(t *testing.T) {
+func TestScanRunsOnlySelectedTools(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("<html><body>home</body></html>"))
 	}))
@@ -122,7 +122,7 @@ func TestScanRunsOnlySelectedModules(t *testing.T) {
 
 	cfg := config.New(srv.URL)
 	cfg.Timeout = 5 * time.Second
-	cfg.SelectedModules = []string{"recon", "misconfig"}
+	cfg.SelectedTools = []string{"recon", "misconfig"}
 
 	var logs bytes.Buffer
 	cfg.Logger = log.New(&logs, "", 0)
@@ -146,9 +146,9 @@ func TestScanRunsOnlySelectedModules(t *testing.T) {
 	}
 }
 
-func TestScanReportsInvalidSelectedModule(t *testing.T) {
+func TestScanReportsInvalidSelectedTool(t *testing.T) {
 	cfg := config.New("https://example.com")
-	cfg.SelectedModules = []string{"banana"}
+	cfg.SelectedTools = []string{"banana"}
 
 	rep := Scan(&cfg)
 
@@ -161,37 +161,37 @@ func TestScanReportsInvalidSelectedModule(t *testing.T) {
 	}
 }
 
-func TestNormalizeModulesAddsReconDependency(t *testing.T) {
-	got, err := NormalizeModules([]string{"sqli", "misconfig"})
+func TestNormalizeToolsAddsReconDependency(t *testing.T) {
+	got, err := NormalizeTools([]string{"sqli", "misconfig"})
 	if err != nil {
-		t.Fatalf("NormalizeModules: %v", err)
+		t.Fatalf("NormalizeTools: %v", err)
 	}
 
 	if strings.Join(got, ",") != "recon,sqli,misconfig" {
-		t.Fatalf("modules = %v", got)
+		t.Fatalf("tools = %v", got)
 	}
 }
 
-func TestNormalizeModulesDefaultsToCoreModules(t *testing.T) {
-	got, err := NormalizeModules(nil)
+func TestNormalizeToolsDefaultsToCoreTools(t *testing.T) {
+	got, err := NormalizeTools(nil)
 	if err != nil {
-		t.Fatalf("NormalizeModules: %v", err)
+		t.Fatalf("NormalizeTools: %v", err)
 	}
 
 	want := "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve"
 	if strings.Join(got, ",") != want {
-		t.Fatalf("modules = %v", got)
+		t.Fatalf("tools = %v", got)
 	}
 }
 
-func TestNormalizeModulesAllowsAllOfficialModules(t *testing.T) {
-	got, err := NormalizeModules(ModuleNames())
+func TestNormalizeToolsAllowsAllOfficialTools(t *testing.T) {
+	got, err := NormalizeTools(ToolNames())
 	if err != nil {
-		t.Fatalf("NormalizeModules: %v", err)
+		t.Fatalf("NormalizeTools: %v", err)
 	}
 
 	want := "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve,crawler,content,subdomain,ports,nmap,sqlmap,bannergrab"
 	if strings.Join(got, ",") != want {
-		t.Fatalf("modules = %v", got)
+		t.Fatalf("tools = %v", got)
 	}
 }
