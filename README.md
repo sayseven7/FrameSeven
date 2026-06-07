@@ -29,4 +29,5 @@ go run cmd/cli/v1/main.go -url https://target.example
 - [CLI v1](docs/v1/cli.md)
 - [MCP Server](docs/v1/mcp.md)
 - [Report Format v1](docs/v1/report-format.md)
+- [Go Reference](https://pkg.go.dev/github.com/sayseven7/frameseven)
 - [Contributing](CONTRIBUTING.md)
