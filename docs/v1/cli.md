@@ -127,7 +127,7 @@ independently from command success.
 ## Network Behavior
 
 - TLS certificate verification is disabled so the scanner can inspect targets
-  with invalid certificates.
+  with invalid certificates. Use the scanner only on authorized networks.
 - Cross-origin redirects are blocked.
 - Network failures are attached to the module that was running.
 - Findings are sorted from highest to lowest severity.
