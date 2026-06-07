@@ -4,6 +4,7 @@ package mcp
 import (
 	"context"
 	"net/http"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -51,13 +52,14 @@ func NewStreamableHTTPHandler() http.Handler {
 // RunHTTP starts the MCP server over Streamable HTTP.
 func RunHTTP(ctx context.Context, addr string) error {
 	server := &http.Server{
-		Addr:    addr,
-		Handler: NewStreamableHTTPHandler(),
+		Addr:              addr,
+		Handler:           NewStreamableHTTPHandler(),
+		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	go func() {
 		<-ctx.Done()
-		_ = server.Shutdown(context.Background())
+		_ = server.Shutdown(ctx)
 	}()
 
 	err := server.ListenAndServe()
