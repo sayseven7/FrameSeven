@@ -46,6 +46,40 @@ func TestFailedAlwaysReturnsInfoWithDetail(t *testing.T) {
 	}
 }
 
+func TestExecuteRejectsNonAllowlistedBinary(t *testing.T) {
+	if _, err := Execute(time.Second, "rm", "-rf", "/"); err == nil {
+		t.Fatal("expected non-allowlisted binary to be rejected")
+	}
+}
+
+func TestSafeArg(t *testing.T) {
+	valid := []string{
+		"testaspnet.vulnweb.com",
+		"http://testaspnet.vulnweb.com/page?id=1",
+		"192.168.1.10",
+	}
+	for _, v := range valid {
+		if err := SafeArg(v); err != nil {
+			t.Errorf("SafeArg(%q) = %v, want nil", v, err)
+		}
+	}
+
+	invalid := []string{
+		"",
+		"   ",
+		"-oG",                // option flag injection
+		"--script=evil",      // long option injection
+		"host with space",    // splits into extra arguments
+		"host\nwith-newline", // control character
+		"host\x00null",       // null byte
+	}
+	for _, v := range invalid {
+		if err := SafeArg(v); err == nil {
+			t.Errorf("SafeArg(%q) = nil, want error", v)
+		}
+	}
+}
+
 func TestSnippetTruncates(t *testing.T) {
 	got := snippet(strings.Repeat("x", 600), 500)
 	if !strings.HasSuffix(got, "[…]") {

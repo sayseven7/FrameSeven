@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -45,15 +46,20 @@ type Result struct {
 	TimedOut bool
 }
 
-// Execute runs bin with args under a timeout. It never panics: every failure
-// mode (binary missing, non-zero exit, timeout) is returned as an error while
-// still handing back whatever output was captured so callers can degrade
-// gracefully.
+// Execute runs one of the allowlisted external binaries with args under a
+// timeout. The binary name must be a member of the allowlist; any other value
+// is rejected before a process is started, so this runner can never launch an
+// arbitrary executable. It never panics: every failure mode (binary missing,
+// non-zero exit, timeout) is returned as an error while still handing back
+// whatever output was captured so callers can degrade gracefully.
 func Execute(timeout time.Duration, bin string, args ...string) (Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd, err := command(ctx, bin, args)
+	if err != nil {
+		return Result{}, err
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -71,6 +77,45 @@ func Execute(timeout time.Duration, bin string, args ...string) (Result, error) 
 	}
 
 	return res, runErr
+}
+
+// command builds an *exec.Cmd for one of the explicitly allowlisted external
+// binaries. Each branch passes a constant binary name, so it is impossible to
+// launch an executable that is not named here regardless of what a caller
+// supplies. Unknown names are rejected with an error.
+func command(ctx context.Context, bin string, args []string) (*exec.Cmd, error) {
+	switch bin {
+	case "nmap":
+		// #nosec G204 - constant binary; the only caller-derived argument (the target) is validated by SafeArg against flag/control-char injection.
+		return exec.CommandContext(ctx, "nmap", args...), nil
+	case "sqlmap":
+		// #nosec G204 - constant binary; the only caller-derived argument (the target) is validated by SafeArg against flag/control-char injection.
+		return exec.CommandContext(ctx, "sqlmap", args...), nil
+	default:
+		return nil, fmt.Errorf("external: %q is not an allowlisted binary", bin)
+	}
+}
+
+// SafeArg validates a caller-derived value (a target host or URL) before it is
+// passed to an external binary. It blocks argument injection: a value that is
+// empty, looks like an option flag, or contains whitespace or control
+// characters could be reinterpreted by the tool as a flag or a second argument.
+func SafeArg(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errors.New("value is empty")
+	}
+
+	if strings.HasPrefix(value, "-") {
+		return fmt.Errorf("value %q must not start with '-'", value)
+	}
+
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f || r == ' ' {
+			return fmt.Errorf("value %q contains an illegal character", value)
+		}
+	}
+
+	return nil
 }
 
 // NotFound is the standard info finding for a binary that is not installed or

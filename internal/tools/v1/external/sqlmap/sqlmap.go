@@ -26,6 +26,10 @@ func Run(cfg *config.Config, _ *http.Client, _ *recon.Surface) []finding.Finding
 		return []finding.Finding{external.Unavailable(binary, "no target URL was configured")}
 	}
 
+	if err := external.SafeArg(cfg.Target); err != nil {
+		return []finding.Finding{external.Unavailable(binary, "unsafe target URL: "+err.Error())}
+	}
+
 	if _, err := exec.LookPath(binary); err != nil {
 		return []finding.Finding{external.NotFound(binary)}
 	}

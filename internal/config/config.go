@@ -3,10 +3,11 @@
 package config
 
 import (
+	"crypto/rand"
 	"errors"
 	"io"
 	"log"
-	"math/rand/v2"
+	"math/big"
 	"net/url"
 	"strings"
 	"time"
@@ -62,14 +63,20 @@ var UserAgents = []string{
 	"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
 }
 
-// RandomUserAgent returns a randomly selected agent from UserAgents. It falls
-// back to DefaultUserAgent if the pool is somehow empty.
+// RandomUserAgent returns a randomly selected agent from UserAgents. It uses
+// crypto/rand so the choice is not a predictable PRNG sequence, and falls back
+// to DefaultUserAgent if the pool is empty or the entropy source fails.
 func RandomUserAgent() string {
 	if len(UserAgents) == 0 {
 		return DefaultUserAgent
 	}
 
-	return UserAgents[rand.IntN(len(UserAgents))]
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(UserAgents))))
+	if err != nil {
+		return DefaultUserAgent
+	}
+
+	return UserAgents[n.Int64()]
 }
 
 // New returns a Config with defaults applied for the given target.
