@@ -51,10 +51,12 @@ Add to `opencode.json`:
 
 ```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "frameseven": {
-      "type": "url",
-      "url": "http://127.0.0.1:8080/mcp"
+      "type": "remote",
+      "url": "http://127.0.0.1:8080/mcp",
+      "enabled": true
     }
   }
 }
