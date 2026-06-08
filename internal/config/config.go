@@ -31,6 +31,10 @@ type Config struct {
 	// means every tool is enabled.
 	SelectedTools []string
 
+	// CustomPayloads are optional caller-supplied probe values. Tools that
+	// support dynamic input decide how to apply them.
+	CustomPayloads []string
+
 	// Logger receives scan progress and diagnostic messages.
 	Logger *log.Logger
 
@@ -44,6 +48,8 @@ const (
 	DefaultTimeout      = 10 * time.Second
 	DefaultUserAgent    = "frameseven/v1"
 	DefaultRateRequests = 50
+	MaxCustomPayloads   = 25
+	MaxCustomPayloadLen = 300
 )
 
 // UserAgents is a pool of realistic browser User-Agent strings. The CLI picks
@@ -148,4 +154,34 @@ func (c Config) Validate() error {
 	}
 
 	return nil
+}
+
+// NormalizedCustomPayloads returns a bounded, deduplicated custom payload list.
+func (c Config) NormalizedCustomPayloads() []string {
+	seen := map[string]bool{}
+	var payloads []string
+
+	for _, raw := range c.CustomPayloads {
+		payload := strings.TrimSpace(raw)
+		if payload == "" {
+			continue
+		}
+
+		if len(payload) > MaxCustomPayloadLen {
+			payload = payload[:MaxCustomPayloadLen]
+		}
+
+		if seen[payload] {
+			continue
+		}
+
+		seen[payload] = true
+		payloads = append(payloads, payload)
+
+		if len(payloads) == MaxCustomPayloads {
+			break
+		}
+	}
+
+	return payloads
 }

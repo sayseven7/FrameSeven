@@ -59,7 +59,7 @@ func unauthEndpoints(cfg *config.Config, client *http.Client, base *url.URL) []f
 	var findings []finding.Finding
 	reported := map[string]bool{}
 
-	for _, path := range adminPaths {
+	for _, path := range allAdminPaths(cfg) {
 		ref, err := base.Parse(path)
 		if err != nil {
 			continue
@@ -119,6 +119,41 @@ func unauthEndpoints(cfg *config.Config, client *http.Client, base *url.URL) []f
 	}
 
 	return findings
+}
+
+func allAdminPaths(cfg *config.Config) []string {
+	seen := map[string]bool{}
+	var selected []string
+
+	for _, path := range adminPaths {
+		selected = appendAdminPath(selected, seen, path)
+	}
+
+	for _, payload := range cfg.NormalizedCustomPayloads() {
+		if strings.Contains(payload, "://") {
+			continue
+		}
+
+		path := payload
+		if !strings.HasPrefix(path, "/") {
+			path = "/" + path
+		}
+
+		selected = appendAdminPath(selected, seen, path)
+	}
+
+	return selected
+}
+
+func appendAdminPath(paths []string, seen map[string]bool, path string) []string {
+	path = strings.TrimSpace(path)
+	if path == "" || seen[path] {
+		return paths
+	}
+
+	seen[path] = true
+
+	return append(paths, path)
 }
 
 var idRe = regexp.MustCompile(`^\d+$`)

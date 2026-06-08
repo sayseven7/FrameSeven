@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/sayseven7/frameseven/internal/config"
@@ -147,6 +148,8 @@ var candidates = []string{
 	"vendor",
 }
 
+var candidateLabel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,62}$`)
+
 // Run resolves common subdomain candidates and reports any that exist.
 func Run(cfg *config.Config, _ *http.Client, _ *recon.Surface) []finding.Finding {
 	base, err := url.Parse(cfg.Target)
@@ -160,7 +163,7 @@ func Run(cfg *config.Config, _ *http.Client, _ *recon.Surface) []finding.Finding
 	}
 
 	var found []string
-	for _, candidate := range candidates {
+	for _, candidate := range allCandidates(cfg) {
 		host := candidate + "." + root
 		addrs, err := net.LookupHost(host)
 		if err != nil || len(addrs) == 0 {
@@ -202,4 +205,30 @@ func rootDomain(host string) string {
 	}
 
 	return strings.Join(parts[len(parts)-2:], ".")
+}
+
+func allCandidates(cfg *config.Config) []string {
+	seen := map[string]bool{}
+	var selected []string
+
+	for _, candidate := range candidates {
+		selected = appendCandidate(selected, seen, candidate)
+	}
+
+	for _, payload := range cfg.NormalizedCustomPayloads() {
+		selected = appendCandidate(selected, seen, strings.Trim(payload, "."))
+	}
+
+	return selected
+}
+
+func appendCandidate(candidates []string, seen map[string]bool, candidate string) []string {
+	candidate = strings.ToLower(strings.TrimSpace(candidate))
+	if candidate == "" || seen[candidate] || !candidateLabel.MatchString(candidate) {
+		return candidates
+	}
+
+	seen[candidate] = true
+
+	return append(candidates, candidate)
 }

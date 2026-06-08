@@ -44,7 +44,7 @@ func Run(cfg *config.Config, client *http.Client, _ *recon.Surface) []finding.Fi
 	var found []string
 	var first *response
 
-	for _, path := range paths {
+	for _, path := range allPaths(cfg) {
 		resp := get(cfg, client, resolve(base, path))
 		if resp == nil || resp.status < 200 || resp.status >= 400 {
 			continue
@@ -81,6 +81,41 @@ func Run(cfg *config.Config, client *http.Client, _ *recon.Surface) []finding.Fi
 			"Add soft-404 detection before increasing the content wordlist.",
 		},
 	}}
+}
+
+func allPaths(cfg *config.Config) []string {
+	seen := map[string]bool{}
+	var selected []string
+
+	for _, path := range paths {
+		selected = appendPath(selected, seen, path)
+	}
+
+	for _, payload := range cfg.NormalizedCustomPayloads() {
+		if strings.Contains(payload, "://") {
+			continue
+		}
+
+		path := payload
+		if !strings.HasPrefix(path, "/") {
+			path = "/" + path
+		}
+
+		selected = appendPath(selected, seen, path)
+	}
+
+	return selected
+}
+
+func appendPath(paths []string, seen map[string]bool, path string) []string {
+	path = strings.TrimSpace(path)
+	if path == "" || seen[path] {
+		return paths
+	}
+
+	seen[path] = true
+
+	return append(paths, path)
 }
 
 func resolve(base *url.URL, path string) string {

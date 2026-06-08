@@ -30,6 +30,7 @@ var probes = []probe{
 }
 
 var paramHint = regexp.MustCompile(`(?i)url|uri|link|src|dest|redirect|next|host|target|callback|img|image|load|fetch|domain|site|return|continue|feed|proxy`)
+var customSignature = regexp.MustCompile(`(?i)instance-id|ami-id|security-credentials|AccessKeyId|computeMetadata|/computeMetadata/v1/|project-id|azEnvironment|"compute"|vmId`)
 
 type response struct {
 	body string
@@ -80,7 +81,7 @@ func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []find
 func testParam(cfg *config.Config, client *http.Client, p recon.Param) []finding.Finding {
 	var findings []finding.Finding
 
-	for _, pr := range probes {
+	for _, pr := range allProbes(cfg) {
 		resp := inject(cfg, client, p, pr.payload)
 		if resp == nil || !pr.signature.MatchString(resp.body) {
 			continue
@@ -107,6 +108,30 @@ func testParam(cfg *config.Config, client *http.Client, p recon.Param) []finding
 	}
 
 	return findings
+}
+
+func allProbes(cfg *config.Config) []probe {
+	selected := append([]probe{}, probes...)
+	seen := map[string]bool{}
+
+	for _, pr := range probes {
+		seen[pr.payload] = true
+	}
+
+	for _, payload := range cfg.NormalizedCustomPayloads() {
+		if seen[payload] {
+			continue
+		}
+
+		seen[payload] = true
+		selected = append(selected, probe{
+			label:     "Custom SSRF payload",
+			payload:   payload,
+			signature: customSignature,
+		})
+	}
+
+	return selected
 }
 
 func inject(cfg *config.Config, client *http.Client, p recon.Param, payload string) *response {

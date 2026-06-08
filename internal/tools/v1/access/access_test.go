@@ -96,6 +96,31 @@ func TestRunReportsProtectedAdminCandidate(t *testing.T) {
 	t.Errorf("expected protected admin candidate finding, got %+v", findings)
 }
 
+func TestRunChecksCustomAdminPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/hidden-panel" {
+			fmt.Fprint(w, "hidden control panel")
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+	cfg.CustomPayloads = []string{"hidden-panel"}
+
+	findings := Run(&cfg, srv.Client(), &recon.Surface{})
+	for _, f := range findings {
+		if f.Title == "Sensitive endpoint reachable without authentication: /hidden-panel" {
+			return
+		}
+	}
+
+	t.Errorf("expected custom admin path finding, got %+v", findings)
+}
+
 func TestPublicContentIsInfoNotHighIDOR(t *testing.T) {
 	// A public news page returns different content per id but no user-bound
 	// data. This must not be reported as a High-severity IDOR.

@@ -50,6 +50,7 @@ type scanToolInput struct {
 	NVDAPIKey          string   `json:"nvd_api_key" jsonschema:"optional NVD API key for CVE lookups"`
 	ActiveScanAccepted bool     `json:"active_scan_accepted" jsonschema:"must be true to confirm this tool may send active security probes to the target"`
 	ExtraTools         []string `json:"extra_tools" jsonschema:"optional additional Framework v1 tools to run with this tool"`
+	CustomPayloads     []string `json:"custom_payloads" jsonschema:"optional caller-supplied probes used by tools that support dynamic payloads"`
 }
 
 type scanToolOutput struct {
@@ -89,6 +90,7 @@ type reportToolInput struct {
 	UserAgent          string   `json:"user_agent" jsonschema:"User-Agent header; uses the project default when empty"`
 	NVDAPIKey          string   `json:"nvd_api_key" jsonschema:"optional NVD API key for CVE lookups"`
 	ActiveScanAccepted bool     `json:"active_scan_accepted" jsonschema:"must be true to confirm this tool may send active security probes to the target"`
+	CustomPayloads     []string `json:"custom_payloads" jsonschema:"optional caller-supplied probes used by tools that support dynamic payloads"`
 	Format             string   `json:"format" jsonschema:"report format: text (CLI), markdown, or both; defaults to text"`
 }
 
@@ -152,6 +154,8 @@ func V1ScanTool(toolName string) func(context.Context, *mcpsdk.CallToolRequest, 
 		}
 
 		cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.RateRequests, input.UserAgent, input.NVDAPIKey)
+		cfg.CustomPayloads = input.CustomPayloads
+
 		if err := cfg.Validate(); err != nil {
 			return nil, scanToolOutput{}, err
 		}
@@ -194,6 +198,8 @@ func V1Report(ctx context.Context, req *mcpsdk.CallToolRequest, input reportTool
 	}
 
 	cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.RateRequests, input.UserAgent, input.NVDAPIKey)
+	cfg.CustomPayloads = input.CustomPayloads
+
 	if err := cfg.Validate(); err != nil {
 		return nil, reportToolOutput{}, err
 	}

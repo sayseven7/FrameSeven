@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/sayseven7/frameseven/internal/config"
@@ -43,6 +44,8 @@ var contexts = []injContext{
 	{"string", "' AND '1'='1", "' AND '1'='2", "' AND '1'='2' UNION SELECT ", "-- -"},
 	{"numeric", " AND 1=1", " AND 1=2", " AND 1=2 UNION SELECT ", "-- -"},
 }
+
+var sqlErrorSignature = regexp.MustCompile(`(?i)sql syntax|mysql|mariadb|postgresql|sqlite|sql server|odbc|jdbc|ora-\d+|syntax error|unclosed quotation|unterminated quoted string`)
 
 // dbProfile holds the DBMS-specific SQL used during extraction. wrap delimits a
 // scalar expression with markers using that DBMS's concatenation dialect.
@@ -162,7 +165,61 @@ func testParam(cfg *config.Config, client *http.Client, p recon.Param) []finding
 		return confirmed(cfg, client, p, orig, c, *truthy)
 	}
 
-	return nil
+	return testCustomPayloads(cfg, client, p, orig, *base)
+}
+
+func testCustomPayloads(cfg *config.Config, client *http.Client, p recon.Param, orig string, base response) []finding.Finding {
+	var findings []finding.Finding
+
+	for _, payload := range cfg.NormalizedCustomPayloads() {
+		injected := orig + payload
+		resp := request(cfg, client, p, injected)
+		if resp == nil {
+			continue
+		}
+
+		reason := customSQLiReason(base, *resp)
+		if reason == "" {
+			continue
+		}
+
+		findings = append(findings, finding.Finding{
+			Title:       "Custom SQL injection payload produced a suspicious response in parameter '" + p.Name + "'",
+			Module:      "sqli",
+			Severity:    finding.Medium,
+			OWASP:       "A03:2025 - Injection",
+			CWE:         "CWE-89",
+			CVSS:        6.5,
+			Description: "A caller-supplied SQL injection payload changed the response in a way that warrants manual verification.",
+			Evidence: finding.Evidence{
+				Request:   resp.dump,
+				Response:  trim(resp.body, 400),
+				Extracted: reason + " via " + injected,
+			},
+			NextSteps: []string{
+				"Manually verify whether the custom payload reached a SQL interpreter.",
+				"Use parameterized queries / prepared statements for this parameter.",
+			},
+		})
+	}
+
+	return findings
+}
+
+func customSQLiReason(base, resp response) string {
+	if resp.status >= 500 && resp.status != base.status {
+		return "server error"
+	}
+
+	if sqlErrorSignature.MatchString(resp.body) {
+		return "SQL error signature"
+	}
+
+	if similarity(base.body, resp.body) < 0.75 {
+		return "large response change"
+	}
+
+	return ""
 }
 
 func confirmed(cfg *config.Config, client *http.Client, p recon.Param, orig string, c injContext, detected response) []finding.Finding {
