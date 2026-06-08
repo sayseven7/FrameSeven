@@ -102,6 +102,8 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 		"",
 		"",
 		"",
+		"",
+		"",
 		outputDir,
 		"",
 		"yes",
@@ -130,6 +132,14 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 		t.Errorf("rate = %d", received.RateRequests)
 	}
 
+	if received.ToolTimeout != config.DefaultToolTimeout {
+		t.Errorf("tool timeout = %v", received.ToolTimeout)
+	}
+
+	if received.ToolConcurrency != config.DefaultToolConcurrency {
+		t.Errorf("tool concurrency = %d", received.ToolConcurrency)
+	}
+
 	if !slices.Contains(config.UserAgents, received.UserAgent) {
 		t.Errorf("user agent = %q, want a random agent from the pool", received.UserAgent)
 	}
@@ -150,6 +160,8 @@ func TestRunWizardAcceptsCustomValuesWithYesFlag(t *testing.T) {
 	input := strings.Join([]string{
 		"https://example.com",
 		"25s",
+		"45s",
+		"3",
 		"12",
 		"security-team/v1",
 		outputDir,
@@ -174,6 +186,14 @@ func TestRunWizardAcceptsCustomValuesWithYesFlag(t *testing.T) {
 		t.Errorf("rate = %d", received.RateRequests)
 	}
 
+	if received.ToolTimeout != 45*time.Second {
+		t.Errorf("tool timeout = %v", received.ToolTimeout)
+	}
+
+	if received.ToolConcurrency != 3 {
+		t.Errorf("tool concurrency = %d", received.ToolConcurrency)
+	}
+
 	if received.UserAgent != "security-team/v1" {
 		t.Errorf("user agent = %q", received.UserAgent)
 	}
@@ -196,6 +216,8 @@ func TestRunWizardCancellationDoesNotScan(t *testing.T) {
 
 	input := strings.Join([]string{
 		"https://example.com",
+		"",
+		"",
 		"",
 		"",
 		"",
@@ -245,6 +267,44 @@ func TestRunAcceptsToolFlag(t *testing.T) {
 
 	if strings.Join(received.SelectedTools, ",") != "recon,sqli,misconfig" {
 		t.Errorf("selected tools = %v", received.SelectedTools)
+	}
+}
+
+func TestRunAcceptsPerformanceFlags(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	var received config.Config
+	outputDir := t.TempDir()
+
+	code := run(
+		[]string{
+			"-url", "https://example.com",
+			"--out", outputDir,
+			"--tool-timeout", "45s",
+			"--concurrency", "3",
+			"--quiet",
+		},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		false,
+		func(cfg *config.Config) report.Report {
+			received = *cfg
+
+			return report.Report{}
+		},
+	)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, stderr.String())
+	}
+
+	if received.ToolTimeout != 45*time.Second {
+		t.Errorf("tool timeout = %v", received.ToolTimeout)
+	}
+
+	if received.ToolConcurrency != 3 {
+		t.Errorf("tool concurrency = %d", received.ToolConcurrency)
 	}
 }
 

@@ -45,6 +45,8 @@ type normalizeToolsOutput struct {
 type scanToolInput struct {
 	Target             string   `json:"target" jsonschema:"authorized HTTP or HTTPS target URL"`
 	TimeoutSeconds     int      `json:"timeout_seconds" jsonschema:"per-request timeout in seconds; uses the project default when empty"`
+	ToolTimeoutSeconds int      `json:"tool_timeout_seconds" jsonschema:"maximum runtime for each scanner tool in seconds; uses the project default when empty"`
+	Concurrency        int      `json:"concurrency" jsonschema:"scanner tools to run in parallel after recon; uses the project default when empty"`
 	RateRequests       int      `json:"rate_requests" jsonschema:"requests sent by the rate-limit tool; uses the project default when empty"`
 	UserAgent          string   `json:"user_agent" jsonschema:"User-Agent header; uses the project default when empty"`
 	NVDAPIKey          string   `json:"nvd_api_key" jsonschema:"optional NVD API key for CVE lookups"`
@@ -86,6 +88,8 @@ type reportToolInput struct {
 	Target             string   `json:"target" jsonschema:"authorized HTTP or HTTPS target URL"`
 	Tools              []string `json:"tools" jsonschema:"scanner tools to run; empty runs the default scan profile"`
 	TimeoutSeconds     int      `json:"timeout_seconds" jsonschema:"per-request timeout in seconds; uses the project default when empty"`
+	ToolTimeoutSeconds int      `json:"tool_timeout_seconds" jsonschema:"maximum runtime for each scanner tool in seconds; uses the project default when empty"`
+	Concurrency        int      `json:"concurrency" jsonschema:"scanner tools to run in parallel after recon; uses the project default when empty"`
 	RateRequests       int      `json:"rate_requests" jsonschema:"requests sent by the rate-limit tool; uses the project default when empty"`
 	UserAgent          string   `json:"user_agent" jsonschema:"User-Agent header; uses the project default when empty"`
 	NVDAPIKey          string   `json:"nvd_api_key" jsonschema:"optional NVD API key for CVE lookups"`
@@ -153,7 +157,7 @@ func V1ScanTool(toolName string) func(context.Context, *mcpsdk.CallToolRequest, 
 			return nil, scanToolOutput{}, err
 		}
 
-		cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.RateRequests, input.UserAgent, input.NVDAPIKey)
+		cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.ToolTimeoutSeconds, input.Concurrency, input.RateRequests, input.UserAgent, input.NVDAPIKey)
 		cfg.CustomPayloads = input.CustomPayloads
 
 		if err := cfg.Validate(); err != nil {
@@ -197,7 +201,7 @@ func V1Report(ctx context.Context, req *mcpsdk.CallToolRequest, input reportTool
 		return nil, reportToolOutput{}, err
 	}
 
-	cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.RateRequests, input.UserAgent, input.NVDAPIKey)
+	cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.ToolTimeoutSeconds, input.Concurrency, input.RateRequests, input.UserAgent, input.NVDAPIKey)
 	cfg.CustomPayloads = input.CustomPayloads
 
 	if err := cfg.Validate(); err != nil {
@@ -269,13 +273,21 @@ func reportStatus(rep report.Report) string {
 	return "complete"
 }
 
-func buildScanConfig(target string, selected []string, timeoutSeconds, rateRequests int, userAgent, nvdAPIKey string) config.Config {
+func buildScanConfig(target string, selected []string, timeoutSeconds, toolTimeoutSeconds, concurrency, rateRequests int, userAgent, nvdAPIKey string) config.Config {
 	cfg := config.New(target)
 	cfg.SelectedTools = selected
 	cfg.Logger = log.New(io.Discard, "", 0)
 
 	if timeoutSeconds > 0 {
 		cfg.Timeout = time.Duration(timeoutSeconds) * time.Second
+	}
+
+	if toolTimeoutSeconds > 0 {
+		cfg.ToolTimeout = time.Duration(toolTimeoutSeconds) * time.Second
+	}
+
+	if concurrency > 0 {
+		cfg.ToolConcurrency = concurrency
 	}
 
 	if rateRequests > 0 {

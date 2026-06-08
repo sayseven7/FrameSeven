@@ -42,6 +42,8 @@ type scanFunc func(*config.Config) report.Report
 type options struct {
 	target      string
 	timeout     time.Duration
+	toolTimeout time.Duration
+	concurrency int
 	rate        int
 	userAgent   string
 	outputDir   string
@@ -102,6 +104,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 
 	cfg := config.New(opts.target)
 	cfg.Timeout = opts.timeout
+	cfg.ToolTimeout = opts.toolTimeout
+	cfg.ToolConcurrency = opts.concurrency
 	cfg.RateRequests = opts.rate
 	cfg.UserAgent = opts.userAgent
 	cfg.NVDAPIKey = os.Getenv("NVD_API_KEY")
@@ -134,6 +138,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 	cfg.Logger.Printf("INFO  scan started for %s", cfg.Target)
 	cfg.Logger.Printf("INFO  output directory: %s", opts.outputDir)
 	cfg.Logger.Printf("INFO  selected tools: %s", strings.Join(cfg.SelectedTools, ", "))
+	cfg.Logger.Printf("INFO  tool timeout: %s", cfg.ToolTimeout)
+	cfg.Logger.Printf("INFO  tool concurrency: %d", cfg.ToolConcurrency)
 
 	rep := scan(&cfg)
 
@@ -165,6 +171,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 
 	flags.StringVar(&opts.target, "url", "", "target URL to scan")
 	flags.DurationVar(&opts.timeout, "timeout", config.DefaultTimeout, "per-request timeout")
+	flags.DurationVar(&opts.toolTimeout, "tool-timeout", config.DefaultToolTimeout, "maximum runtime for each scanner tool")
+	flags.IntVar(&opts.concurrency, "concurrency", config.DefaultToolConcurrency, "scanner tools to run in parallel after recon")
 	flags.IntVar(&opts.rate, "rate", config.DefaultRateRequests, "requests for the rate-limit test")
 	flags.StringVar(&opts.userAgent, "ua", "", "User-Agent header (default: random realistic browser agent)")
 	flags.StringVar(&opts.outputDir, "out", defaultOutputDir, "directory for reports and scan logs")
@@ -223,6 +231,8 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 
 	opts.target = prompt(reader, output, "Target URL", opts.target)
 	opts.timeout = promptDuration(reader, output, "Per-request timeout", opts.timeout)
+	opts.toolTimeout = promptDuration(reader, output, "Per-tool timeout", opts.toolTimeout)
+	opts.concurrency = promptInt(reader, output, "Tool concurrency", opts.concurrency)
 	opts.rate = promptInt(reader, output, "Rate-limit request count", opts.rate)
 	opts.userAgent = promptUserAgent(reader, output, opts.userAgent)
 	opts.outputDir = prompt(reader, output, "Output directory", opts.outputDir)
@@ -232,6 +242,8 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 	fmt.Fprintln(output, "Scan configuration")
 	fmt.Fprintf(output, "  Target:     %s\n", opts.target)
 	fmt.Fprintf(output, "  Timeout:    %s\n", opts.timeout)
+	fmt.Fprintf(output, "  Tool limit: %s\n", opts.toolTimeout)
+	fmt.Fprintf(output, "  Concurrency: %d\n", opts.concurrency)
 	fmt.Fprintf(output, "  Rate count: %d\n", opts.rate)
 	fmt.Fprintf(output, "  User-Agent: %s\n", opts.userAgent)
 	fmt.Fprintf(output, "  Output:     %s\n", opts.outputDir)
