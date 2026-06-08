@@ -71,6 +71,32 @@ Scanner tools:
 Every scanner tool requires `active_scan_accepted: true` because it may send
 active security probes to the target.
 
+## Resources
+
+The server exposes the pentest playbooks from
+[yaklang/hack-skills](https://www.skills.sh/yaklang/hack-skills) as MCP
+resources. The playbooks are vendored into the binary with `go:embed`, so they
+are available offline and never fetched at runtime.
+
+Every Markdown file under the embedded `skills/` tree is one resource, including
+both the main `SKILL.md` playbooks and their companion references. Resource URIs
+use the Framework v1 prefix:
+
+```text
+skill://hack-skills/v1/<skill>/<file>.md
+```
+
+For example:
+
+```text
+skill://hack-skills/v1/sqli-sql-injection/SKILL.md
+skill://hack-skills/v1/sqli-sql-injection/SCENARIOS.md
+```
+
+Each resource description comes from the playbook frontmatter, so clients can
+list resources and pick the relevant attack methodology before reading it.
+Resources are read-only references and do not send any probes to a target.
+
 ## Scanner Tool Input
 
 Scanner tools accept:

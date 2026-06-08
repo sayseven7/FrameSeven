@@ -28,7 +28,12 @@ Tips:
   - extra_tools composes multiple scanners in a single call.
   - timeout_seconds and rate_requests override scan defaults.
   - report runs the selected tools and returns the result in the CLI report
-    format (text and/or Markdown) for a CLI-identical write-up.`
+    format (text and/or Markdown) for a CLI-identical write-up.
+
+Resources:
+  - Pentest playbooks from yaklang/hack-skills are exposed as MCP resources
+    under skill://hack-skills/v1/. Read them for attack methodology and payload
+    references (for example skill://hack-skills/v1/sqli-sql-injection/SKILL.md).`
 
 // NewServer builds the FrameSeven MCP server.
 func NewServer() *mcpsdk.Server {
@@ -42,6 +47,9 @@ func NewServer() *mcpsdk.Server {
 			Tools: &mcpsdk.ToolCapabilities{
 				ListChanged: false,
 			},
+			Resources: &mcpsdk.ResourceCapabilities{
+				ListChanged: false,
+			},
 			Logging: &mcpsdk.LoggingCapabilities{},
 		},
 		KeepAlive: 30 * time.Second,
@@ -50,6 +58,7 @@ func NewServer() *mcpsdk.Server {
 	server.AddReceivingMiddleware(createLoggingMiddleware())
 
 	RegisterTools(server)
+	RegisterResources(server)
 
 	return server
 }
