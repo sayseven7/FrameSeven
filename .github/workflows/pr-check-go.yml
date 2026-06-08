@@ -138,5 +138,13 @@ jobs:
             exit 1
           fi
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install fpdf2
+        run: python3 -m pip install fpdf2
+
       - name: Test CLI package
         run: go test -v ./cmd/cli/${{ matrix.version }}/...
