@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math/rand/v2"
 	"net/url"
 	"strings"
 	"time"
@@ -43,6 +44,33 @@ const (
 	DefaultUserAgent    = "frameseven/v1"
 	DefaultRateRequests = 50
 )
+
+// UserAgents is a pool of realistic browser User-Agent strings. The CLI picks
+// one at random when no explicit agent is supplied, so probes blend in with
+// ordinary traffic. The honest DefaultUserAgent is included so the project can
+// still identify itself when selected.
+var UserAgents = []string{
+	DefaultUserAgent,
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 14.4; rv:125.0) Gecko/20100101 Firefox/125.0",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+	"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+}
+
+// RandomUserAgent returns a randomly selected agent from UserAgents. It falls
+// back to DefaultUserAgent if the pool is somehow empty.
+func RandomUserAgent() string {
+	if len(UserAgents) == 0 {
+		return DefaultUserAgent
+	}
+
+	return UserAgents[rand.IntN(len(UserAgents))]
+}
 
 // New returns a Config with defaults applied for the given target.
 // The target URL is normalized: scheme and host are lowercased, and any

@@ -96,6 +96,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 		}
 	}
 
+	if strings.TrimSpace(opts.userAgent) == "" {
+		opts.userAgent = config.RandomUserAgent()
+	}
+
 	cfg := config.New(opts.target)
 	cfg.Timeout = opts.timeout
 	cfg.RateRequests = opts.rate
@@ -162,7 +166,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.StringVar(&opts.target, "url", "", "target URL to scan")
 	flags.DurationVar(&opts.timeout, "timeout", config.DefaultTimeout, "per-request timeout")
 	flags.IntVar(&opts.rate, "rate", config.DefaultRateRequests, "requests for the rate-limit test")
-	flags.StringVar(&opts.userAgent, "ua", config.DefaultUserAgent, "User-Agent header")
+	flags.StringVar(&opts.userAgent, "ua", "", "User-Agent header (default: random realistic browser agent)")
 	flags.StringVar(&opts.outputDir, "out", defaultOutputDir, "directory for reports and scan logs")
 	flags.StringVar(&opts.outputDir, "o", defaultOutputDir, "directory for reports and scan logs")
 	flags.BoolVar(&opts.interactive, "interactive", false, "configure the scan interactively")
@@ -220,7 +224,7 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 	opts.target = prompt(reader, output, "Target URL", opts.target)
 	opts.timeout = promptDuration(reader, output, "Per-request timeout", opts.timeout)
 	opts.rate = promptInt(reader, output, "Rate-limit request count", opts.rate)
-	opts.userAgent = prompt(reader, output, "User-Agent", opts.userAgent)
+	opts.userAgent = promptUserAgent(reader, output, opts.userAgent)
 	opts.outputDir = prompt(reader, output, "Output directory", opts.outputDir)
 	opts.tools = promptTools(reader, output, opts.tools)
 
@@ -289,6 +293,44 @@ func promptInt(reader *bufio.Reader, output io.Writer, label string, defaultValu
 	}
 }
 
+func promptUserAgent(reader *bufio.Reader, output io.Writer, current string) string {
+	fmt.Fprintln(output)
+	fmt.Fprintln(output, "User-Agent options")
+	fmt.Fprintf(output, "  %d) %s\n", 0, "random  - pick a realistic browser agent (default)")
+	for i, ua := range config.UserAgents {
+		fmt.Fprintf(output, "  %d) %s\n", i+1, ua)
+	}
+
+	defaultValue := "random"
+	if strings.TrimSpace(current) != "" {
+		defaultValue = current
+	}
+
+	for {
+		value := strings.TrimSpace(prompt(reader, output, "User-Agent (number, custom string, or random)", defaultValue))
+
+		if value == "" || strings.EqualFold(value, "random") {
+			return config.RandomUserAgent()
+		}
+
+		number, err := strconv.Atoi(value)
+		if err != nil {
+			// Anything that is not a number is treated as a custom agent.
+			return value
+		}
+
+		if number == 0 {
+			return config.RandomUserAgent()
+		}
+
+		if number >= 1 && number <= len(config.UserAgents) {
+			return config.UserAgents[number-1]
+		}
+
+		fmt.Fprintf(output, "Choose a number between 0 and %d, or type a custom User-Agent.\n", len(config.UserAgents))
+	}
+}
+
 func promptTools(reader *bufio.Reader, output io.Writer, current []string) []string {
 	defaultValue := "default"
 	if len(current) > 0 {
@@ -300,6 +342,7 @@ func promptTools(reader *bufio.Reader, output io.Writer, current []string) []str
 	for i, tool := range scanner.Tools {
 		fmt.Fprintf(output, "  %d) %-10s %s\n", i+1, tool.Name, tool.Description)
 	}
+	fmt.Fprintf(output, "  %-3s %-10s %s\n", "all", "", "Run every available tool")
 
 	for {
 		value := prompt(reader, output, "Tools to run (numbers or names, comma-separated)", defaultValue)

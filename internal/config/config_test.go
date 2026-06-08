@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -22,6 +23,19 @@ func TestNewDefaults(t *testing.T) {
 
 	if cfg.RateRequests != DefaultRateRequests {
 		t.Errorf("rate requests = %d, want %d", cfg.RateRequests, DefaultRateRequests)
+	}
+}
+
+func TestRandomUserAgent(t *testing.T) {
+	if len(UserAgents) == 0 {
+		t.Fatal("UserAgents pool is empty")
+	}
+
+	for range 20 {
+		ua := RandomUserAgent()
+		if !slices.Contains(UserAgents, ua) {
+			t.Fatalf("RandomUserAgent returned %q, which is not in the pool", ua)
+		}
 	}
 }
 

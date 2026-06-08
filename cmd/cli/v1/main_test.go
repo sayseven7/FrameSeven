@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -129,8 +130,8 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 		t.Errorf("rate = %d", received.RateRequests)
 	}
 
-	if received.UserAgent != config.DefaultUserAgent {
-		t.Errorf("user agent = %q", received.UserAgent)
+	if !slices.Contains(config.UserAgents, received.UserAgent) {
+		t.Errorf("user agent = %q, want a random agent from the pool", received.UserAgent)
 	}
 
 	if strings.Join(received.SelectedTools, ",") != "recon,sqli,access,ssrf,lfi,misconfig,ratelimit,cve" {
