@@ -123,6 +123,20 @@ func unauthEndpoints(cfg *config.Config, client *http.Client, base *url.URL) []f
 
 var idRe = regexp.MustCompile(`^\d+$`)
 
+// emailRe matches an email address, a strong indicator of per-user data.
+var emailRe = regexp.MustCompile(`[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}`)
+
+// sensitiveKeywords are lower-case markers that suggest a response body holds
+// data scoped to a specific user or account rather than public content.
+var sensitiveKeywords = []string{
+	"password", "passwd",
+	"private", "ssn", "social security",
+	"credit card", "card number", "cardnumber", "cvv",
+	"api_key", "apikey", "access_token", "auth_token", "secret",
+	"account number", "accountnumber", "iban", "routing number",
+	"date of birth", "dateofbirth", "birthdate", "phone number",
+}
+
 func idor(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
 	var findings []finding.Finding
 	tested := map[string]bool{}
@@ -172,9 +186,20 @@ func probeIDOR(cfg *config.Config, client *http.Client, p recon.Param, value str
 			continue
 		}
 
-		// Same status and comparable size, but different content => likely a
-		// different object exposed without an ownership check.
-		if resp.body != base.body && comparableSize(base.body, resp.body) {
+		// An adjacent identifier returning a distinct object of comparable size
+		// only proves the parameter is an *enumerable* object reference. Public
+		// content (news articles, products, blog posts) behaves identically and
+		// is not a vulnerability. A real IDOR requires the object to expose data
+		// belonging to another user/account, so we only raise a High-severity
+		// finding when the body carries user- or account-bound data; otherwise
+		// it is reported as informational for manual review.
+		if resp.body == base.body || !comparableSize(base.body, resp.body) {
+			continue
+		}
+
+		extracted := p.Name + "=" + value + " -> " + p.Name + "=" + strconv.Itoa(neighbor)
+
+		if marker, ok := sensitiveMarker(resp.body); ok {
 			return finding.Finding{
 				Title:       "Possible IDOR in parameter '" + p.Name + "'",
 				Module:      "access",
@@ -182,21 +207,59 @@ func probeIDOR(cfg *config.Config, client *http.Client, p recon.Param, value str
 				OWASP:       "A01:2025 - Broken Access Control",
 				CWE:         "CWE-639",
 				CVSS:        7.1,
-				Description: "Changing the identifier returns a different object with HTTP 200, suggesting missing ownership checks.",
+				Description: "Changing the identifier returns another object whose body contains user- or account-bound data (" + marker + "), suggesting access to records owned by other users without an ownership check.",
 				Evidence: finding.Evidence{
 					Request:   resp.dump,
 					Response:  trim(resp.body, 400),
-					Extracted: p.Name + "=" + value + " -> " + p.Name + "=" + strconv.Itoa(neighbor),
+					Extracted: extracted,
 				},
 				NextSteps: []string{
+					"Manually confirm the returned record belongs to a different user or account.",
 					"Enforce object-level authorization tied to the authenticated user.",
 					"Prefer unguessable identifiers and verify ownership on every access.",
 				},
 			}, true
 		}
+
+		return finding.Finding{
+			Title:       "Enumerable object reference in parameter '" + p.Name + "'",
+			Module:      "access",
+			Severity:    finding.Info,
+			OWASP:       "A01:2025 - Broken Access Control",
+			CWE:         "CWE-639",
+			Description: "Adjacent identifier values return distinct HTTP 200 objects, so the parameter is enumerable. This is not on its own an IDOR: public content (articles, products, news) behaves the same way. It is only a vulnerability if the objects expose data restricted to other users or accounts.",
+			Evidence: finding.Evidence{
+				Request:   resp.dump,
+				Response:  trim(resp.body, 400),
+				Extracted: extracted,
+			},
+			NextSteps: []string{
+				"Manually verify whether the returned objects contain data owned by other users/accounts (e.g. profiles, orders, messages).",
+				"If the data is private, enforce object-level authorization and prefer unguessable identifiers.",
+			},
+		}, true
 	}
 
 	return finding.Finding{}, false
+}
+
+// sensitiveMarker reports whether a response body carries data that looks
+// user- or account-bound. Its presence is what separates a genuine IDOR
+// candidate from ordinary enumerable public content. It returns a short label
+// describing the first marker found.
+func sensitiveMarker(body string) (string, bool) {
+	if emailRe.MatchString(body) {
+		return "email address", true
+	}
+
+	lower := strings.ToLower(body)
+	for _, kw := range sensitiveKeywords {
+		if strings.Contains(lower, kw) {
+			return kw, true
+		}
+	}
+
+	return "", false
 }
 
 func comparableSize(a, b string) bool {

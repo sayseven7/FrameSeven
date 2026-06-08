@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sayseven7/frameseven/internal/config"
+	"github.com/sayseven7/frameseven/internal/finding"
 	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
@@ -93,6 +94,41 @@ func TestRunReportsProtectedAdminCandidate(t *testing.T) {
 	}
 
 	t.Errorf("expected protected admin candidate finding, got %+v", findings)
+}
+
+func TestPublicContentIsInfoNotHighIDOR(t *testing.T) {
+	// A public news page returns different content per id but no user-bound
+	// data. This must not be reported as a High-severity IDOR.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		fmt.Fprintf(w, "<html><body><h1>News article number %s</h1><p>Public press release content goes here.</p></body></html>", id)
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+
+	surface := recon.Surface{
+		Params: []recon.Param{
+			{Name: "id", Endpoint: srv.URL + "/ReadNews.aspx?id=2", Method: http.MethodGet},
+		},
+	}
+
+	var found bool
+	for _, f := range Run(&cfg, srv.Client(), &surface) {
+		if f.CWE != "CWE-639" {
+			continue
+		}
+
+		found = true
+		if f.Severity != finding.Info {
+			t.Errorf("public enumerable content severity = %q, want %q", f.Severity, finding.Info)
+		}
+	}
+
+	if !found {
+		t.Errorf("expected an informational enumerable-reference finding")
+	}
 }
 
 func TestRunNoIDORForNonNumeric(t *testing.T) {
