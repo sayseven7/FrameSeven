@@ -76,8 +76,8 @@ Framework v1 runs selected tools in this order. The first eight tools are select
 10. `content`: checks a small seed list of common content paths.
 11. `subdomain`: resolves common subdomain candidates.
 12. `ports`: checks common web-facing TCP ports.
-13. `nmap`: records Nmap integration availability.
-14. `sqlmap`: records sqlmap integration availability.
+13. `nmap`: runs an Nmap scan of common web-facing ports and reports the open ones. If Nmap is missing or the run fails, it degrades to an informational finding instead of blocking the scan.
+14. `sqlmap`: runs a sqlmap SQL injection test against the target URL and reports any confirmed injection. If sqlmap is missing or the run fails, it degrades to an informational finding instead of blocking the scan.
 15. `bannergrab`: checks lightweight FTP, SSH, and SMTP service banners.
 
 ## Safety Notice

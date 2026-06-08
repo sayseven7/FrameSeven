@@ -23,14 +23,14 @@ import (
 	"github.com/sayseven7/frameseven/internal/tools/v1/bannergrab"
 	"github.com/sayseven7/frameseven/internal/tools/v1/content"
 	"github.com/sayseven7/frameseven/internal/tools/v1/crawler"
+	"github.com/sayseven7/frameseven/internal/tools/v1/external/nmap"
+	"github.com/sayseven7/frameseven/internal/tools/v1/external/sqlmap"
 	"github.com/sayseven7/frameseven/internal/tools/v1/lfi"
 	"github.com/sayseven7/frameseven/internal/tools/v1/misconfig"
-	"github.com/sayseven7/frameseven/internal/tools/v1/nmap"
 	"github.com/sayseven7/frameseven/internal/tools/v1/ports"
 	"github.com/sayseven7/frameseven/internal/tools/v1/ratelimit"
 	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 	"github.com/sayseven7/frameseven/internal/tools/v1/sqli"
-	"github.com/sayseven7/frameseven/internal/tools/v1/sqlmap"
 	"github.com/sayseven7/frameseven/internal/tools/v1/ssrf"
 	"github.com/sayseven7/frameseven/internal/tools/v1/subdomain"
 )
@@ -61,8 +61,8 @@ var Tools = []Tool{
 	{Name: "content", Description: "Common content and directory discovery", Activity: "checking common content paths", EnabledByDefault: false, Run: content.Run},
 	{Name: "subdomain", Description: "Common DNS subdomain discovery", Activity: "resolving common subdomain candidates", EnabledByDefault: false, Run: subdomain.Run},
 	{Name: "ports", Description: "Light TCP checks for common web-facing ports", Activity: "checking common web-facing TCP ports", EnabledByDefault: false, Run: ports.Run},
-	{Name: "nmap", Description: "Nmap integration availability check", Activity: "checking Nmap integration availability", EnabledByDefault: false, Run: nmap.Run},
-	{Name: "sqlmap", Description: "sqlmap integration availability check", Activity: "checking sqlmap integration availability", EnabledByDefault: false, Run: sqlmap.Run},
+	{Name: "nmap", Description: "Nmap common-port scan (fail-safe external execution)", Activity: "running an Nmap scan of common web-facing ports", EnabledByDefault: false, Run: nmap.Run},
+	{Name: "sqlmap", Description: "sqlmap SQL injection test (fail-safe external execution)", Activity: "running a sqlmap SQL injection test", EnabledByDefault: false, Run: sqlmap.Run},
 	{Name: "bannergrab", Description: "FTP, SSH, and SMTP service banner checks", Activity: "checking FTP, SSH, and SMTP service banners", EnabledByDefault: false, Run: bannergrab.Run},
 }
 
@@ -99,9 +99,13 @@ func Scan(cfg *config.Config) report.Report {
 		}
 
 		toolStarted := startTool(logger, m.Name, m.Activity)
-		toolFindings := m.Run(cfg, client, surface)
+		toolFindings, panicErr := runTool(m, cfg, client, surface)
 		findings = append(findings, toolFindings...)
 		toolErrors := recorder.Take(m.Name)
+		if panicErr != nil {
+			logger.Printf("ERROR [%s] isolated panic: %s", m.Name, panicErr.Message)
+			toolErrors = append(toolErrors, *panicErr)
+		}
 		scanErrors = append(scanErrors, toolErrors...)
 		finishTool(logger, m.Name, toolStarted, len(toolFindings), len(toolErrors))
 	}
@@ -114,6 +118,24 @@ func Scan(cfg *config.Config) report.Report {
 	)
 
 	return report.New("v1", cfg.Target, started, time.Since(started), *surface, findings, scanErrors)
+}
+
+// runTool executes one tool's Run function with panic isolation. A tool that
+// panics (a bug, a nil dereference, an external integration crash) is contained
+// here: it yields no findings and a recorded scan error instead of aborting the
+// whole scan, so every other tool still runs and the report is still returned.
+func runTool(m Tool, cfg *config.Config, client *http.Client, surface *recon.Surface) (findings []finding.Finding, scanErr *report.ScanErrorV1) {
+	defer func() {
+		if r := recover(); r != nil {
+			findings = nil
+			scanErr = &report.ScanErrorV1{
+				Module:  m.Name,
+				Message: fmt.Sprintf("tool panicked and was isolated: %v", r),
+			}
+		}
+	}()
+
+	return m.Run(cfg, client, surface), nil
 }
 
 // ToolNames returns every Framework v1 tool name in execution order.
