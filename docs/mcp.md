@@ -80,6 +80,8 @@ Scanner tools accept:
   "target": "https://target.example",
   "active_scan_accepted": true,
   "timeout_seconds": 10,
+  "tool_timeout_seconds": 30,
+  "concurrency": 1,
   "rate_requests": 50,
   "user_agent": "frameseven/v1",
   "nvd_api_key": "",
@@ -111,11 +113,14 @@ only inserted into the existing Framework API v1 scanner flows.
 
 ## Timeouts
 
-`timeout_seconds` is the per-request timeout, not the limit on the whole tool
-call. Slow scanners like `sqli` and `sqlmap` can run past a minute and may hit
-the MCP client's tool-call timeout (`operation timed out`). Raise the client
-timeout, not `timeout_seconds`. In Claude Code, set it in `settings.json` `env`
-(applied on restart):
+`timeout_seconds` is the per-request timeout. `tool_timeout_seconds` is the
+maximum runtime for each selected Framework API v1 scanner tool before the scan
+records a tool error and continues. `concurrency` controls how many independent
+scanner tools run in parallel after `recon`.
+
+Slow full scans can still hit the MCP client's tool-call timeout
+(`operation timed out`). Raise the client timeout when the whole scan needs more
+time. In Claude Code, set it in `settings.json` `env` (applied on restart):
 
 ```json
 {

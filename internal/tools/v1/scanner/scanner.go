@@ -75,9 +75,6 @@ func Scan(cfg *config.Config) report.Report {
 	}
 	cfg.Logger = logger
 
-	recorder := &requestErrorRecorder{}
-	client := newClient(cfg, recorder)
-
 	var findings []finding.Finding
 	var scanErrors []report.ScanErrorV1
 	selected, err := NormalizeTools(cfg.SelectedTools)
@@ -93,21 +90,17 @@ func Scan(cfg *config.Config) report.Report {
 	enabled := selectedTools(selected)
 	surface := &recon.Surface{}
 
-	for _, m := range Tools {
-		if !enabled[m.Name] {
-			continue
-		}
+	if enabled["recon"] {
+		reconTool := toolByName("recon")
+		result := runSelectedTool(reconTool, cfg, surface)
+		findings = append(findings, result.findings...)
+		scanErrors = append(scanErrors, result.scanErrors...)
+	}
 
-		toolStarted := startTool(logger, m.Name, m.Activity)
-		toolFindings, panicErr := runTool(m, cfg, client, surface)
-		findings = append(findings, toolFindings...)
-		toolErrors := recorder.Take(m.Name)
-		if panicErr != nil {
-			logger.Printf("ERROR [%s] isolated panic: %s", m.Name, panicErr.Message)
-			toolErrors = append(toolErrors, *panicErr)
-		}
-		scanErrors = append(scanErrors, toolErrors...)
-		finishTool(logger, m.Name, toolStarted, len(toolFindings), len(toolErrors))
+	results := runConcurrentTools(cfg, surface, enabled)
+	for _, result := range results {
+		findings = append(findings, result.findings...)
+		scanErrors = append(scanErrors, result.scanErrors...)
 	}
 
 	logger.Printf(
@@ -120,11 +113,136 @@ func Scan(cfg *config.Config) report.Report {
 	return report.New("v1", cfg.Target, started, time.Since(started), *surface, findings, scanErrors)
 }
 
+type toolResult struct {
+	findings   []finding.Finding
+	scanErrors []report.ScanErrorV1
+}
+
+func runConcurrentTools(cfg *config.Config, surface *recon.Surface, enabled map[string]bool) []toolResult {
+	tools := runnableTools(enabled)
+	if len(tools) == 0 {
+		return nil
+	}
+
+	concurrency := cfg.ToolConcurrency
+	if concurrency <= 0 {
+		concurrency = config.DefaultToolConcurrency
+	}
+
+	if concurrency > len(tools) {
+		concurrency = len(tools)
+	}
+
+	results := make([]toolResult, len(tools))
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+
+	for range concurrency {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for index := range jobs {
+				results[index] = runSelectedTool(tools[index], cfg, surface)
+			}
+		}()
+	}
+
+	for index := range tools {
+		jobs <- index
+	}
+	close(jobs)
+	wg.Wait()
+
+	return results
+}
+
+func runnableTools(enabled map[string]bool) []Tool {
+	var tools []Tool
+	for _, m := range Tools {
+		if !enabled[m.Name] || m.Name == "recon" {
+			continue
+		}
+
+		tools = append(tools, m)
+	}
+
+	return tools
+}
+
+func toolByName(name string) Tool {
+	for _, tool := range Tools {
+		if tool.Name == name {
+			return tool
+		}
+	}
+
+	return Tool{}
+}
+
+func runSelectedTool(m Tool, cfg *config.Config, surface *recon.Surface) toolResult {
+	recorder := &requestErrorRecorder{}
+	client := newClient(cfg, recorder)
+	toolStarted := startTool(cfg.Logger, m.Name, m.Activity)
+
+	toolFindings, panicErr := runTool(m, cfg, client, surface)
+	toolErrors := recorder.Take(m.Name)
+	if panicErr != nil {
+		cfg.Logger.Printf("ERROR [%s] isolated panic: %s", m.Name, panicErr.Message)
+		toolErrors = append(toolErrors, *panicErr)
+	}
+
+	finishTool(cfg.Logger, m.Name, toolStarted, len(toolFindings), len(toolErrors))
+
+	return toolResult{
+		findings:   toolFindings,
+		scanErrors: toolErrors,
+	}
+}
+
 // runTool executes one tool's Run function with panic isolation. A tool that
 // panics (a bug, a nil dereference, an external integration crash) is contained
 // here: it yields no findings and a recorded scan error instead of aborting the
 // whole scan, so every other tool still runs and the report is still returned.
 func runTool(m Tool, cfg *config.Config, client *http.Client, surface *recon.Surface) (findings []finding.Finding, scanErr *report.ScanErrorV1) {
+	done := make(chan toolResult, 1)
+	go func() {
+		resultFindings, resultErr := runToolIsolated(m, cfg, client, surface)
+		result := toolResult{findings: resultFindings}
+		if resultErr != nil {
+			result.scanErrors = []report.ScanErrorV1{*resultErr}
+		}
+
+		done <- result
+	}()
+
+	timeout := config.DefaultToolTimeout
+	if cfg == nil {
+		timeout = config.DefaultToolTimeout
+	} else {
+		timeout = cfg.ToolTimeout
+	}
+
+	if timeout <= 0 {
+		timeout = config.DefaultToolTimeout
+	}
+
+	select {
+	case result := <-done:
+		if len(result.scanErrors) > 0 {
+			return result.findings, &result.scanErrors[0]
+		}
+
+		return result.findings, nil
+	case <-time.After(timeout):
+		return nil, &report.ScanErrorV1{
+			Module:  m.Name,
+			Message: fmt.Sprintf("tool timed out after %s", timeout),
+		}
+	}
+}
+
+func runToolIsolated(m Tool, cfg *config.Config, client *http.Client, surface *recon.Surface) (findings []finding.Finding, scanErr *report.ScanErrorV1) {
 	defer func() {
 		if r := recover(); r != nil {
 			findings = nil

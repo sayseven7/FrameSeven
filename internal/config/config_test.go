@@ -25,6 +25,14 @@ func TestNewDefaults(t *testing.T) {
 	if cfg.RateRequests != DefaultRateRequests {
 		t.Errorf("rate requests = %d, want %d", cfg.RateRequests, DefaultRateRequests)
 	}
+
+	if cfg.ToolTimeout != DefaultToolTimeout {
+		t.Errorf("tool timeout = %v, want %v", cfg.ToolTimeout, DefaultToolTimeout)
+	}
+
+	if cfg.ToolConcurrency != DefaultToolConcurrency {
+		t.Errorf("tool concurrency = %d, want %d", cfg.ToolConcurrency, DefaultToolConcurrency)
+	}
 }
 
 func TestRandomUserAgent(t *testing.T) {
@@ -112,7 +120,23 @@ func TestValidateNumericFields(t *testing.T) {
 	}
 
 	cfg = New("https://example.com")
+	cfg.ToolTimeout = 0
+
+	if err := cfg.Validate(); err == nil {
+		t.Errorf("expected error for non-positive tool timeout")
+	}
+
+	cfg = New("https://example.com")
+	cfg.ToolConcurrency = 0
+
+	if err := cfg.Validate(); err == nil {
+		t.Errorf("expected error for non-positive tool concurrency")
+	}
+
+	cfg = New("https://example.com")
 	cfg.Timeout = 5 * time.Second
+	cfg.ToolTimeout = 20 * time.Second
+	cfg.ToolConcurrency = 2
 	cfg.RateRequests = 10
 
 	if err := cfg.Validate(); err != nil {

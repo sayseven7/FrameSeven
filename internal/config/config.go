@@ -20,6 +20,14 @@ type Config struct {
 	Timeout   time.Duration
 	UserAgent string
 
+	// ToolTimeout is the maximum time one scanner tool may run before the
+	// scanner records a tool error and continues.
+	ToolTimeout time.Duration
+
+	// ToolConcurrency limits how many independent scanner tools run at once
+	// after recon has populated the shared surface.
+	ToolConcurrency int
+
 	// RateRequests is how many requests the rate-limit tool sends.
 	RateRequests int
 
@@ -45,11 +53,13 @@ type Config struct {
 // Project-level defaults. New applies these when the caller does not supply
 // an explicit value.
 const (
-	DefaultTimeout      = 10 * time.Second
-	DefaultUserAgent    = "frameseven/v1"
-	DefaultRateRequests = 50
-	MaxCustomPayloads   = 25
-	MaxCustomPayloadLen = 300
+	DefaultTimeout         = 10 * time.Second
+	DefaultToolTimeout     = 120 * time.Second
+	DefaultToolConcurrency = 10
+	DefaultUserAgent       = "frameseven/v1"
+	DefaultRateRequests    = 50
+	MaxCustomPayloads      = 25
+	MaxCustomPayloadLen    = 300
 )
 
 // UserAgents is a pool of realistic browser User-Agent strings. The CLI picks
@@ -92,11 +102,13 @@ func New(target string) Config {
 	target = normalizeTarget(target)
 
 	return Config{
-		Target:       target,
-		Timeout:      DefaultTimeout,
-		UserAgent:    DefaultUserAgent,
-		RateRequests: DefaultRateRequests,
-		Logger:       log.New(io.Discard, "", log.Ltime),
+		Target:          target,
+		Timeout:         DefaultTimeout,
+		ToolTimeout:     DefaultToolTimeout,
+		ToolConcurrency: DefaultToolConcurrency,
+		UserAgent:       DefaultUserAgent,
+		RateRequests:    DefaultRateRequests,
+		Logger:          log.New(io.Discard, "", log.Ltime),
 	}
 }
 
@@ -147,6 +159,14 @@ func (c Config) Validate() error {
 
 	if c.Timeout <= 0 {
 		return errors.New("timeout must be positive")
+	}
+
+	if c.ToolTimeout <= 0 {
+		return errors.New("tool timeout must be positive")
+	}
+
+	if c.ToolConcurrency <= 0 {
+		return errors.New("tool concurrency must be positive")
 	}
 
 	if c.RateRequests <= 0 {

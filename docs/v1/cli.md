@@ -26,6 +26,8 @@ For a development build that has not been installed:
 |---|---:|---|
 | `-url` | required | Absolute HTTP or HTTPS target URL |
 | `-timeout` | `10s` | Timeout applied to each HTTP request |
+| `-tool-timeout` | `30s` | Maximum runtime for each scanner tool |
+| `-concurrency` | `1` | Scanner tools to run in parallel after `recon` |
 | `-rate` | `50` | Requests sent by the rate-limit tool |
 | `-ua` | `frameseven/v1` | User-Agent header sent by the scanner |
 | `-out`, `-o` | `reports` | Directory for generated reports and the scan log |
@@ -53,6 +55,8 @@ interactive setup. It asks for:
 
 - Target URL
 - Per-request timeout
+- Per-tool timeout
+- Tool concurrency
 - Rate-limit request count
 - User-Agent
 - Output directory
@@ -85,6 +89,15 @@ Set a longer request timeout:
 frameseven \
   -url https://target.example \
   -timeout 30s
+```
+
+Set a per-tool timeout and run independent tools in parallel after recon:
+
+```bash
+frameseven \
+  -url https://target.example \
+  -tool-timeout 45s \
+  -concurrency 4
 ```
 
 Change the rate-limit probe count:
@@ -156,6 +169,8 @@ independently from command success.
   with invalid certificates. Use the scanner only on authorized networks.
 - Cross-origin redirects are blocked.
 - Network failures are attached to the tool that was running.
+- `recon` runs before dependent tools. Other selected tools may run in parallel
+  when `-concurrency` is greater than `1`.
 - Findings are sorted from highest to lowest severity.
 
 ## Progress and Logs

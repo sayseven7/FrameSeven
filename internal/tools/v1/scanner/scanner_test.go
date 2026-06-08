@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/sayseven7/frameseven/internal/config"
+	"github.com/sayseven7/frameseven/internal/finding"
+	"github.com/sayseven7/frameseven/internal/tools/v1/recon"
 )
 
 func TestNewClient(t *testing.T) {
@@ -158,6 +160,96 @@ func TestScanReportsInvalidSelectedTool(t *testing.T) {
 
 	if rep.Errors[0].Module != "scanner" || !strings.Contains(rep.Errors[0].Message, "banana") {
 		t.Fatalf("unexpected error: %+v", rep.Errors[0])
+	}
+}
+
+func TestScanRunsToolsConcurrentlyAfterRecon(t *testing.T) {
+	original := Tools
+	defer func() {
+		Tools = original
+	}()
+
+	started := make(chan string, 2)
+	release := make(chan struct{})
+
+	Tools = []Tool{
+		{
+			Name:             "recon",
+			Description:      "test recon",
+			Activity:         "mapping test surface",
+			EnabledByDefault: true,
+			Run: func(_ *config.Config, _ *http.Client, surface *recon.Surface) []finding.Finding {
+				surface.Host = "example.com"
+
+				return nil
+			},
+		},
+		{
+			Name:             "alpha",
+			Description:      "test alpha",
+			Activity:         "running alpha",
+			EnabledByDefault: true,
+			Run: func(*config.Config, *http.Client, *recon.Surface) []finding.Finding {
+				started <- "alpha"
+				<-release
+
+				return nil
+			},
+		},
+		{
+			Name:             "beta",
+			Description:      "test beta",
+			Activity:         "running beta",
+			EnabledByDefault: true,
+			Run: func(*config.Config, *http.Client, *recon.Surface) []finding.Finding {
+				started <- "beta"
+				<-release
+
+				return nil
+			},
+		},
+	}
+
+	cfg := config.New("https://example.com")
+	cfg.ToolConcurrency = 2
+	cfg.ToolTimeout = time.Second
+
+	done := make(chan reportDone, 1)
+	go func() {
+		rep := Scan(&cfg)
+		done <- reportDone{host: rep.Surface.Host, errors: len(rep.Errors)}
+	}()
+
+	waitStartedTool(t, started)
+	waitStartedTool(t, started)
+	close(release)
+
+	select {
+	case result := <-done:
+		if result.host != "example.com" {
+			t.Errorf("surface host = %q, want example.com", result.host)
+		}
+
+		if result.errors != 0 {
+			t.Errorf("scan errors = %d, want 0", result.errors)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("scan did not finish")
+	}
+}
+
+type reportDone struct {
+	host   string
+	errors int
+}
+
+func waitStartedTool(t *testing.T, started <-chan string) {
+	t.Helper()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for concurrent tool start")
 	}
 }
 
