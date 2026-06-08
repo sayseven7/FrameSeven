@@ -87,6 +87,26 @@ Scanner tools accept:
 }
 ```
 
+## Timeouts
+
+`timeout_seconds` is the per-request timeout, not the limit on the whole tool
+call. Slow scanners like `sqli` and `sqlmap` can run past a minute and may hit
+the MCP client's tool-call timeout (`operation timed out`). Raise the client
+timeout, not `timeout_seconds`. In Claude Code, set it in `settings.json` `env`
+(applied on restart):
+
+```json
+{
+  "env": {
+    "MCP_TOOL_TIMEOUT": "600000",
+    "MCP_TIMEOUT": "120000"
+  }
+}
+```
+
+`MCP_TOOL_TIMEOUT` bounds each tool call; `MCP_TIMEOUT` bounds server startup
+(both in milliseconds).
+
 ## Output
 
 Scanner tools return a summarized report containing:
