@@ -13,6 +13,7 @@ go.work.sum
 /pkg
 /vendor
 reports/
+=2.8
 
 # Python
 __pycache__/

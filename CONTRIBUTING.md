@@ -35,6 +35,21 @@ cmd/cli/v1/
 
 If a Go wrapper calls another implementation, keep the version visible in the same structure whenever that code is part of the framework surface.
 
+## Development Dependencies
+
+PDF report generation is implemented in Python and called through a Go wrapper.
+Development environments must provide Python 3 and `fpdf2` locally:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install "fpdf2>=2.8"
+```
+
+The wrapper uses `FRAMESEVEN_PYTHON` when set, otherwise it looks for
+`.venv/bin/python`, then falls back to `python3`. If Python is missing,
+`fpdf2` is not installed, or the renderer fails, the Go wrapper must return an
+error that identifies the problem.
+
 ## Pending Improvements
 
 Problems identified by the team that still require correction are tracked in `pending-improvements/v1/`.

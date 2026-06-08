@@ -2,7 +2,9 @@ package report
 
 import (
 	"bytes"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -130,10 +132,30 @@ func TestWritePDFCreatesValidDocument(t *testing.T) {
 	}
 
 	out := buf.String()
-	for _, want := range []string{"%PDF-1.4", "/Type /Catalog", "frameseven scan report", "%%EOF"} {
+	for _, want := range []string{"%PDF-", "/Type /Catalog", "%%EOF"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("PDF report missing %q", want)
 		}
+	}
+
+	if buf.Len() < 1000 {
+		t.Errorf("PDF report is too small: %d bytes", buf.Len())
+	}
+}
+
+func TestPDFRenderErrorDescribesMissingPython(t *testing.T) {
+	err := pdfRenderError("missing-python", exec.ErrNotFound, "")
+
+	if !strings.Contains(err.Error(), "Python interpreter") {
+		t.Fatalf("error does not describe missing Python: %v", err)
+	}
+}
+
+func TestPDFRenderErrorDescribesMissingFPDF2(t *testing.T) {
+	err := pdfRenderError("python3", errors.New("exit status 1"), "ModuleNotFoundError: No module named 'fpdf'")
+
+	if !strings.Contains(err.Error(), "fpdf2 is not installed") {
+		t.Fatalf("error does not describe missing fpdf2: %v", err)
 	}
 }
 

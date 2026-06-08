@@ -36,9 +36,23 @@ The public operating system names are `linux`, `macos`, and `windows`.
 
 - A supported Linux, macOS, or Windows system
 - Network access to the authorized scan target
+- Python 3 with `fpdf2` for PDF report generation
 
 Building from source additionally requires Git and Go 1.26.4 or later in the
 Go 1.26 release line.
+
+Install the Python PDF dependency with your environment manager of choice, for
+example:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install "fpdf2>=2.8"
+```
+
+CLI v1 and MCP report rendering use `FRAMESEVEN_PYTHON` when set, then
+`.venv/bin/python`, then `python3`. If Python is missing, `fpdf2` is not
+installed, or the Python renderer fails, PDF generation returns a clear error
+through the Go wrapper.
 
 ## Debian and Ubuntu
 

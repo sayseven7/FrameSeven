@@ -2,183 +2,105 @@ package report
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"strconv"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
-const (
-	pdfPageWidth  = 612
-	pdfPageHeight = 792
-	pdfMargin     = 54
-	pdfFontSize   = 10
-	pdfLineHeight = 14
-	pdfMaxColumns = 92
-)
+import _ "embed"
+
+//go:embed pdf.py
+var pdfScriptV1 string
 
 // RenderPDF returns a PDF report as bytes, matching the file the CLI writes.
 func RenderPDF(rep Report) ([]byte, error) {
-	var b bytes.Buffer
-	if err := WritePDF(&b, rep); err != nil {
-		return nil, err
+	data, err := json.Marshal(rep)
+	if err != nil {
+		return nil, fmt.Errorf("encode report for PDF: %w", err)
 	}
 
-	return b.Bytes(), nil
+	python := pdfPython()
+	cmd := exec.Command(python, "-c", pdfScriptV1)
+	cmd.Stdin = bytes.NewReader(data)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, pdfRenderError(python, err, stderr.String())
+	}
+
+	return stdout.Bytes(), nil
 }
 
-// WritePDF renders a portable PDF report using the same CLI v1 text content.
+// WritePDF renders a portable PDF report using the Python PDF renderer v1.
 func WritePDF(w io.Writer, rep Report) error {
-	lines := wrapPDFLines(RenderText(rep))
-	pages := paginatePDFLines(lines)
-	data := buildPDFDocument(pages)
+	data, err := RenderPDF(rep)
+	if err != nil {
+		return err
+	}
 
-	_, err := w.Write(data)
+	_, err = w.Write(data)
 	return err
 }
 
-func wrapPDFLines(text string) []string {
-	var lines []string
-	for _, line := range splitLines(text) {
-		if line == "" {
-			lines = append(lines, "")
-			continue
-		}
-
-		lines = append(lines, wrapPDFLine(line)...)
+func pdfPython() string {
+	if value := os.Getenv("FRAMESEVEN_PYTHON"); value != "" {
+		return value
 	}
 
-	return lines
+	for _, dir := range candidatePythonDirs() {
+		venvPython := filepath.Join(dir, ".venv", "bin", "python")
+		if _, err := os.Stat(venvPython); err == nil {
+			return venvPython
+		}
+	}
+
+	return "python3"
 }
 
-func wrapPDFLine(line string) []string {
-	if len(line) <= pdfMaxColumns {
-		return []string{line}
+func candidatePythonDirs() []string {
+	var dirs []string
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return []string{"."}
 	}
 
-	var out []string
-	remaining := line
-	for len(remaining) > pdfMaxColumns {
-		cut := pdfMaxColumns
-		for cut > 0 && remaining[cut] != ' ' {
-			cut--
+	for {
+		dirs = append(dirs, dir)
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
 		}
 
-		if cut == 0 {
-			cut = pdfMaxColumns
-		}
-
-		out = append(out, strings.TrimRight(remaining[:cut], " "))
-		remaining = strings.TrimLeft(remaining[cut:], " ")
+		dir = parent
 	}
 
-	if remaining != "" {
-		out = append(out, remaining)
-	}
-
-	return out
+	return dirs
 }
 
-func paginatePDFLines(lines []string) [][]string {
-	linesPerPage := (pdfPageHeight - (pdfMargin * 2)) / pdfLineHeight
-	var pages [][]string
-
-	for len(lines) > 0 {
-		count := linesPerPage
-		if len(lines) < count {
-			count = len(lines)
-		}
-
-		pages = append(pages, lines[:count])
-		lines = lines[count:]
+func pdfRenderError(python string, err error, stderr string) error {
+	stderr = strings.TrimSpace(stderr)
+	if errors.Is(err, exec.ErrNotFound) {
+		return fmt.Errorf("render PDF with Python: Python interpreter %q was not found; install Python 3 or set FRAMESEVEN_PYTHON", python)
 	}
 
-	if len(pages) == 0 {
-		pages = append(pages, []string{})
+	if strings.Contains(stderr, "fpdf2 is required") || strings.Contains(stderr, "ModuleNotFoundError: No module named 'fpdf'") {
+		return fmt.Errorf("render PDF with Python: fpdf2 is not installed for %q; install it with python3 -m pip install fpdf2 or set FRAMESEVEN_PYTHON: %s", python, stderr)
 	}
 
-	return pages
-}
-
-func buildPDFDocument(pages [][]string) []byte {
-	objectCount := 3 + len(pages)*2
-	objects := make([]string, objectCount+1)
-	objects[1] = "<< /Type /Catalog /Pages 2 0 R >>"
-
-	var kids strings.Builder
-	for i := range pages {
-		pageObject := 3 + i*2
-		fmt.Fprintf(&kids, "%d 0 R ", pageObject)
+	if stderr != "" {
+		return fmt.Errorf("render PDF with Python: %w: %s", err, stderr)
 	}
 
-	objects[2] = fmt.Sprintf("<< /Type /Pages /Kids [%s] /Count %d >>", strings.TrimSpace(kids.String()), len(pages))
-
-	for i, pageLines := range pages {
-		pageObject := 3 + i*2
-		contentObject := pageObject + 1
-		objects[pageObject] = fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %d %d] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Courier >> >> >> /Contents %d 0 R >>", pdfPageWidth, pdfPageHeight, contentObject)
-
-		stream := buildPDFPageStream(pageLines)
-		objects[contentObject] = fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(stream), stream)
-	}
-
-	var out bytes.Buffer
-	out.WriteString("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n")
-
-	offsets := make([]int, objectCount+1)
-	for i := 1; i <= objectCount; i++ {
-		offsets[i] = out.Len()
-		fmt.Fprintf(&out, "%d 0 obj\n%s\nendobj\n", i, objects[i])
-	}
-
-	xrefOffset := out.Len()
-	fmt.Fprintf(&out, "xref\n0 %d\n", objectCount+1)
-	out.WriteString("0000000000 65535 f \n")
-
-	for i := 1; i <= objectCount; i++ {
-		fmt.Fprintf(&out, "%010d 00000 n \n", offsets[i])
-	}
-
-	fmt.Fprintf(&out, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", objectCount+1, xrefOffset)
-
-	return out.Bytes()
-}
-
-func buildPDFPageStream(lines []string) string {
-	var stream strings.Builder
-	fmt.Fprintf(&stream, "BT\n/F1 %d Tf\n%d %d Td\n", pdfFontSize, pdfMargin, pdfPageHeight-pdfMargin)
-
-	for i, line := range lines {
-		if i > 0 {
-			fmt.Fprintf(&stream, "0 -%d Td\n", pdfLineHeight)
-		}
-
-		fmt.Fprintf(&stream, "(%s) Tj\n", escapePDFText(line))
-	}
-
-	stream.WriteString("ET")
-
-	return stream.String()
-}
-
-func escapePDFText(value string) string {
-	var out strings.Builder
-	for _, r := range value {
-		switch r {
-		case '\\', '(', ')':
-			out.WriteByte('\\')
-			out.WriteRune(r)
-		case '\t':
-			out.WriteString("    ")
-		default:
-			if r >= 32 && r <= 126 {
-				out.WriteRune(r)
-			} else {
-				quoted := strconv.QuoteToASCII(string(r))
-				out.WriteString(quoted[1 : len(quoted)-1])
-			}
-		}
-	}
-
-	return out.String()
+	return fmt.Errorf("render PDF with Python: %w", err)
 }

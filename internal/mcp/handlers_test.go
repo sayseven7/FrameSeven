@@ -155,7 +155,7 @@ func TestBuildReportToolOutput(t *testing.T) {
 		t.Fatalf("report_pdf_base64 is not base64: %v", err)
 	}
 
-	if !strings.HasPrefix(string(pdf), "%PDF-1.4") {
+	if !strings.HasPrefix(string(pdf), "%PDF-") {
 		t.Errorf("report_pdf_base64 missing PDF header")
 	}
 }

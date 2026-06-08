@@ -9,6 +9,7 @@ common web vulnerabilities and misconfigurations.
 ## Requirements
 
 - Go 1.26.4 or later in the Go 1.26 release line
+- Python 3 with `fpdf2` for PDF report generation
 - Git
 - Network access to the authorized target
 - Linux, macOS, or another environment supported by Go
@@ -18,9 +19,16 @@ common web vulnerabilities and misconfigurations.
 ```bash
 git clone https://github.com/sayseven7/frameseven.git
 cd frameseven
+python3 -m venv .venv
+.venv/bin/python -m pip install "fpdf2>=2.8"
 go test ./...
 go run cmd/cli/v1/main.go -url https://target.example
 ```
+
+PDF reports are rendered by the Go wrapper through Python. The wrapper uses
+`FRAMESEVEN_PYTHON` when set, otherwise it looks for `.venv/bin/python`, then
+falls back to `python3`. If Python or `fpdf2` is missing, PDF generation returns
+a clear error instead of silently producing a broken report.
 
 ## Documentation
 
