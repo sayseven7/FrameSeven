@@ -54,7 +54,7 @@ type Config struct {
 // an explicit value.
 const (
 	DefaultTimeout         = 10 * time.Second
-	DefaultToolTimeout     = 30 * time.Second
+	DefaultToolTimeout     = 120 * time.Second
 	DefaultToolConcurrency = 10
 	DefaultUserAgent       = "frameseven/v1"
 	DefaultRateRequests    = 50
