@@ -31,6 +31,7 @@ var probes = []probe{
 }
 
 var paramHint = regexp.MustCompile(`(?i)file|path|page|doc|document|template|include|require|load|read|view|download|dir|folder|name|content|resource`)
+var customSignature = regexp.MustCompile(`(?i)root:.*:0:0:|\[fonts\]|\[extensions\]|[A-Za-z0-9+/]{120,}={0,2}`)
 
 type response struct {
 	body string
@@ -81,7 +82,7 @@ func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []find
 func testParam(cfg *config.Config, client *http.Client, p recon.Param) []finding.Finding {
 	var findings []finding.Finding
 
-	for _, pr := range probes {
+	for _, pr := range allProbes(cfg) {
 		resp := inject(cfg, client, p, pr.payload)
 		if resp == nil || !pr.signature.MatchString(resp.body) {
 			continue
@@ -108,6 +109,30 @@ func testParam(cfg *config.Config, client *http.Client, p recon.Param) []finding
 	}
 
 	return findings
+}
+
+func allProbes(cfg *config.Config) []probe {
+	selected := append([]probe{}, probes...)
+	seen := map[string]bool{}
+
+	for _, pr := range probes {
+		seen[pr.payload] = true
+	}
+
+	for _, payload := range cfg.NormalizedCustomPayloads() {
+		if seen[payload] {
+			continue
+		}
+
+		seen[payload] = true
+		selected = append(selected, probe{
+			label:     "Custom LFI payload",
+			payload:   payload,
+			signature: customSignature,
+		})
+	}
+
+	return selected
 }
 
 func inject(cfg *config.Config, client *http.Client, p recon.Param, payload string) *response {

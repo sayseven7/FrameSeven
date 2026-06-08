@@ -73,3 +73,37 @@ func TestRunNoInjectionOnStableEndpoint(t *testing.T) {
 		t.Errorf("expected no findings on stable endpoint, got %+v", findings)
 	}
 }
+
+func TestRunChecksCustomPayloads(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+
+		if strings.Contains(id, "custom-sqli") {
+			http.Error(w, "SQL syntax error near custom-sqli", http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Fprint(w, "regular item page")
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+	cfg.CustomPayloads = []string{"' custom-sqli"}
+
+	surface := recon.Surface{
+		Params: []recon.Param{
+			{Name: "id", Endpoint: srv.URL + "/item?id=2", Method: http.MethodGet},
+		},
+	}
+
+	findings := Run(&cfg, srv.Client(), &surface)
+
+	for _, f := range findings {
+		if strings.Contains(f.Title, "Custom SQL injection payload") {
+			return
+		}
+	}
+
+	t.Errorf("expected custom SQLi payload finding, got %+v", findings)
+}

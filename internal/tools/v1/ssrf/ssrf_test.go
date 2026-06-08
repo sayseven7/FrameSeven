@@ -94,3 +94,37 @@ func TestRunSkipsNonURLParam(t *testing.T) {
 		}
 	}
 }
+
+func TestRunChecksCustomPayloads(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target := r.URL.Query().Get("url")
+
+		if target == "http://custom-metadata.local/latest" {
+			fmt.Fprint(w, "instance-id: i-custom\n")
+			return
+		}
+
+		fmt.Fprint(w, "ok")
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+	cfg.CustomPayloads = []string{"http://custom-metadata.local/latest"}
+
+	surface := recon.Surface{
+		Params: []recon.Param{
+			{Name: "url", Endpoint: srv.URL + "/fetch?url=http://test", Method: http.MethodGet},
+		},
+	}
+
+	findings := Run(&cfg, srv.Client(), &surface)
+
+	for _, f := range findings {
+		if strings.Contains(f.Evidence.Extracted, "http://custom-metadata.local/latest") {
+			return
+		}
+	}
+
+	t.Errorf("expected custom SSRF payload finding, got %+v", findings)
+}

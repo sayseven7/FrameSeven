@@ -83,9 +83,31 @@ Scanner tools accept:
   "rate_requests": 50,
   "user_agent": "frameseven/v1",
   "nvd_api_key": "",
-  "extra_tools": []
+  "extra_tools": [],
+  "custom_payloads": []
 }
 ```
+
+`custom_payloads` is optional. It is capped at 25 entries, each entry is capped
+at 300 characters, and unsupported tools ignore it. Framework API v1 tools that
+currently use custom payloads are:
+
+- `frameseven_v1_sqli`: appends each custom payload to discovered parameter
+  values and reports suspicious SQL error, server error, or large response
+  changes for manual verification.
+- `frameseven_v1_lfi`: injects each custom payload into file-like parameters
+  and reports only when known local-file signatures are returned.
+- `frameseven_v1_ssrf`: injects each custom payload into URL-like parameters
+  and reports only when known metadata-service signatures are returned.
+- `frameseven_v1_content`: treats each custom payload as an additional
+  same-target content path. Absolute URLs are ignored.
+- `frameseven_v1_access`: treats each custom payload as an additional
+  same-target sensitive endpoint path. Absolute URLs are ignored.
+- `frameseven_v1_subdomain`: treats each custom payload as an additional DNS
+  label under the target root domain. Invalid labels are ignored.
+
+Custom payloads do not execute shell commands or external programs. They are
+only inserted into the existing Framework API v1 scanner flows.
 
 ## Timeouts
 

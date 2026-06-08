@@ -48,3 +48,28 @@ func TestRunSkipsSoft404Responses(t *testing.T) {
 		t.Fatalf("findings = %+v, want none", findings)
 	}
 }
+
+func TestRunChecksCustomContentPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/private-health" {
+			fmt.Fprint(w, "custom health endpoint")
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+	cfg.CustomPayloads = []string{"private-health"}
+
+	findings := Run(&cfg, srv.Client(), nil)
+	if len(findings) != 1 {
+		t.Fatalf("findings = %+v, want one finding", findings)
+	}
+
+	if findings[0].Evidence.Extracted != "/private-health (200)" {
+		t.Fatalf("extracted = %q, want custom path", findings[0].Evidence.Extracted)
+	}
+}

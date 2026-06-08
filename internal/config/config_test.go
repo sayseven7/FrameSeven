@@ -2,6 +2,7 @@ package config
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -116,5 +117,23 @@ func TestValidateNumericFields(t *testing.T) {
 
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestNormalizedCustomPayloads(t *testing.T) {
+	cfg := New("https://example.com")
+	cfg.CustomPayloads = []string{"  /admin  ", "", "/admin", strings.Repeat("a", MaxCustomPayloadLen+10)}
+
+	payloads := cfg.NormalizedCustomPayloads()
+	if len(payloads) != 2 {
+		t.Fatalf("payloads = %v, want two normalized payloads", payloads)
+	}
+
+	if payloads[0] != "/admin" {
+		t.Errorf("first payload = %q, want /admin", payloads[0])
+	}
+
+	if len(payloads[1]) != MaxCustomPayloadLen {
+		t.Errorf("second payload length = %d, want %d", len(payloads[1]), MaxCustomPayloadLen)
 	}
 }
