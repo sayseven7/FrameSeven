@@ -25,7 +25,7 @@ func RenderPDF(rep Report) ([]byte, error) {
 	}
 
 	python := pdfPython()
-	cmd := exec.Command(python, "-c", pdfScriptV1)
+	cmd := exec.Command(python, "-c", pdfScriptV1) // #nosec G204 - pdfScriptV1 is embedded at compile time via //go:embed; only the Python interpreter path is configurable
 	cmd.Stdin = bytes.NewReader(data)
 
 	var stdout bytes.Buffer
