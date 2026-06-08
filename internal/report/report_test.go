@@ -123,6 +123,20 @@ func TestWriteMarkdownContainsFindingsAndErrors(t *testing.T) {
 	}
 }
 
+func TestWritePDFCreatesValidDocument(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WritePDF(&buf, sampleReport()); err != nil {
+		t.Fatalf("WritePDF: %v", err)
+	}
+
+	out := buf.String()
+	for _, want := range []string{"%PDF-1.4", "/Type /Catalog", "frameseven scan report", "%%EOF"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("PDF report missing %q", want)
+		}
+	}
+}
+
 func TestWriteFilesCreatesAllFormats(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "reports")
 
@@ -131,7 +145,7 @@ func TestWriteFilesCreatesAllFormats(t *testing.T) {
 		t.Fatalf("WriteFiles: %v", err)
 	}
 
-	for _, path := range []string{files.HTML, files.Markdown, files.JSON} {
+	for _, path := range []string{files.HTML, files.Markdown, files.PDF, files.JSON} {
 		info, err := os.Stat(path)
 		if err != nil {
 			t.Errorf("%s was not created: %v", path, err)

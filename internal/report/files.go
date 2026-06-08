@@ -10,6 +10,7 @@ import (
 type FilesV1 struct {
 	HTML     string
 	Markdown string
+	PDF      string
 	JSON     string
 }
 
@@ -22,6 +23,7 @@ func WriteFiles(dir string, rep Report) (FilesV1, error) {
 	files := FilesV1{
 		HTML:     filepath.Join(dir, "report.html"),
 		Markdown: filepath.Join(dir, "report.md"),
+		PDF:      filepath.Join(dir, "report.pdf"),
 		JSON:     filepath.Join(dir, "report.json"),
 	}
 
@@ -33,6 +35,12 @@ func WriteFiles(dir string, rep Report) (FilesV1, error) {
 
 	if err := writeFile(files.Markdown, func(file *os.File) error {
 		return WriteMarkdown(file, rep)
+	}); err != nil {
+		return FilesV1{}, err
+	}
+
+	if err := writeFile(files.PDF, func(file *os.File) error {
+		return WritePDF(file, rep)
 	}); err != nil {
 		return FilesV1{}, err
 	}

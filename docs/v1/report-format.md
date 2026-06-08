@@ -10,6 +10,7 @@ persistent reports to the output directory. The default directory is
 |---|---|
 | `report.html` | Styled, self-contained browser report with expandable evidence |
 | `report.md` | Portable human-readable report |
+| `report.pdf` | Portable PDF report generated from the CLI v1 text report |
 | `report.json` | Structured CLI output contract v1 |
 | `scan.log` | Tool progress and optional request-level debug details |
 

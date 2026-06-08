@@ -186,3 +186,8 @@ data.
 
 `--quiet` hides log messages from the terminal. The complete execution history,
 including warnings and errors, remains available in `scan.log`.
+
+## Report Files
+
+CLI v1 writes `report.html`, `report.md`, `report.pdf`, and `report.json` to
+the selected output directory.

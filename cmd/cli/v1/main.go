@@ -153,6 +153,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 
 	cfg.Logger.Printf("INFO  HTML report: %s", files.HTML)
 	cfg.Logger.Printf("INFO  Markdown report: %s", files.Markdown)
+	cfg.Logger.Printf("INFO  PDF report: %s", files.PDF)
 	cfg.Logger.Printf("INFO  JSON report: %s", files.JSON)
 	cfg.Logger.Printf("INFO  scan log: %s", filepath.Join(opts.outputDir, "scan.log"))
 

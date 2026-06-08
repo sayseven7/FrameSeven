@@ -27,6 +27,7 @@ Every scan creates:
 
 - `reports/report.html`: styled, self-contained report for browsers
 - `reports/report.md`: portable Markdown report
+- `reports/report.pdf`: portable PDF report
 - `reports/report.json`: machine-readable CLI output format v1
 - `reports/scan.log`: execution progress and diagnostic messages
 

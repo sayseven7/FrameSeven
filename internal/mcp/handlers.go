@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -95,7 +96,7 @@ type reportToolInput struct {
 	NVDAPIKey          string   `json:"nvd_api_key" jsonschema:"optional NVD API key for CVE lookups"`
 	ActiveScanAccepted bool     `json:"active_scan_accepted" jsonschema:"must be true to confirm this tool may send active security probes to the target"`
 	CustomPayloads     []string `json:"custom_payloads" jsonschema:"optional caller-supplied probes used by tools that support dynamic payloads"`
-	Format             string   `json:"format" jsonschema:"report format: text (CLI), markdown, or both; defaults to text"`
+	Format             string   `json:"format" jsonschema:"report format: text, markdown, html, pdf, both, or all; defaults to text"`
 }
 
 type reportToolOutput struct {
@@ -109,6 +110,8 @@ type reportToolOutput struct {
 	Format         string   `json:"format" jsonschema:"report format that was rendered"`
 	ReportText     string   `json:"report_text,omitempty" jsonschema:"report rendered in the CLI text format"`
 	ReportMarkdown string   `json:"report_markdown,omitempty" jsonschema:"report rendered in Markdown"`
+	ReportHTML     string   `json:"report_html,omitempty" jsonschema:"self-contained HTML report"`
+	ReportPDF      string   `json:"report_pdf_base64,omitempty" jsonschema:"base64-encoded PDF report bytes"`
 }
 
 // V1ListTools returns the Framework v1 tool catalog.
@@ -234,7 +237,7 @@ func buildReportToolOutput(selected []string, format string, rep report.Report) 
 		out.ReportText = report.RenderText(rep)
 	}
 
-	if format == reportFormatMarkdown || format == reportFormatBoth {
+	if format == reportFormatMarkdown || format == reportFormatBoth || format == reportFormatAll {
 		markdown, err := report.RenderMarkdown(rep)
 		if err != nil {
 			return reportToolOutput{}, err
@@ -243,13 +246,38 @@ func buildReportToolOutput(selected []string, format string, rep report.Report) 
 		out.ReportMarkdown = markdown
 	}
 
+	if format == reportFormatAll {
+		out.ReportText = report.RenderText(rep)
+	}
+
+	if format == reportFormatHTML || format == reportFormatAll {
+		html, err := report.RenderHTML(rep)
+		if err != nil {
+			return reportToolOutput{}, err
+		}
+
+		out.ReportHTML = html
+	}
+
+	if format == reportFormatPDF || format == reportFormatAll {
+		pdf, err := report.RenderPDF(rep)
+		if err != nil {
+			return reportToolOutput{}, err
+		}
+
+		out.ReportPDF = base64.StdEncoding.EncodeToString(pdf)
+	}
+
 	return out, nil
 }
 
 const (
 	reportFormatText     = "text"
 	reportFormatMarkdown = "markdown"
+	reportFormatHTML     = "html"
+	reportFormatPDF      = "pdf"
 	reportFormatBoth     = "both"
+	reportFormatAll      = "all"
 )
 
 func normalizeReportFormat(format string) (string, error) {
@@ -258,10 +286,18 @@ func normalizeReportFormat(format string) (string, error) {
 		return reportFormatText, nil
 	case reportFormatMarkdown, "md":
 		return reportFormatMarkdown, nil
+	case reportFormatHTML:
+		return reportFormatHTML, nil
+	case reportFormatPDF:
+		return reportFormatPDF, nil
 	case reportFormatBoth, "all":
+		if strings.EqualFold(strings.TrimSpace(format), "all") {
+			return reportFormatAll, nil
+		}
+
 		return reportFormatBoth, nil
 	default:
-		return "", fmt.Errorf("unknown report format %q: use text, markdown, or both", format)
+		return "", fmt.Errorf("unknown report format %q: use text, markdown, html, pdf, both, or all", format)
 	}
 }
 

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
@@ -88,7 +89,7 @@ func TestV1ReportRejectsUnknownFormat(t *testing.T) {
 	_, _, err := V1Report(context.Background(), nil, reportToolInput{
 		Target:             "http://example.com",
 		ActiveScanAccepted: true,
-		Format:             "pdf",
+		Format:             "xml",
 	})
 	if err == nil {
 		t.Fatal("expected error for unknown report format")
@@ -101,8 +102,10 @@ func TestNormalizeReportFormat(t *testing.T) {
 		"text":     reportFormatText,
 		"MarkDown": reportFormatMarkdown,
 		"md":       reportFormatMarkdown,
+		"html":     reportFormatHTML,
+		"pdf":      reportFormatPDF,
 		"both":     reportFormatBoth,
-		"all":      reportFormatBoth,
+		"all":      reportFormatAll,
 	}
 
 	for in, want := range cases {
@@ -122,7 +125,7 @@ func TestNormalizeReportFormat(t *testing.T) {
 }
 
 func TestBuildReportToolOutput(t *testing.T) {
-	out, err := buildReportToolOutput([]string{"recon"}, reportFormatBoth, reportFixture())
+	out, err := buildReportToolOutput([]string{"recon"}, reportFormatAll, reportFixture())
 	if err != nil {
 		t.Fatalf("buildReportToolOutput: %v", err)
 	}
@@ -141,6 +144,19 @@ func TestBuildReportToolOutput(t *testing.T) {
 
 	if !strings.Contains(out.ReportMarkdown, "# frameseven Scan Report") {
 		t.Errorf("report_markdown missing header: %q", out.ReportMarkdown)
+	}
+
+	if !strings.Contains(out.ReportHTML, "Web application security report") {
+		t.Errorf("report_html missing heading: %q", out.ReportHTML)
+	}
+
+	pdf, err := base64.StdEncoding.DecodeString(out.ReportPDF)
+	if err != nil {
+		t.Fatalf("report_pdf_base64 is not base64: %v", err)
+	}
+
+	if !strings.HasPrefix(string(pdf), "%PDF-1.4") {
+		t.Errorf("report_pdf_base64 missing PDF header")
 	}
 }
 

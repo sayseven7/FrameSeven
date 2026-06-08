@@ -73,6 +73,17 @@ func RenderMarkdown(rep Report) (string, error) {
 	return b.String(), nil
 }
 
+// RenderHTML returns the self-contained HTML report as a string, matching the
+// file the CLI writes alongside the text report.
+func RenderHTML(rep Report) (string, error) {
+	var b strings.Builder
+	if err := WriteHTML(&b, rep); err != nil {
+		return "", err
+	}
+
+	return b.String(), nil
+}
+
 // WriteText renders a human-readable report grouped from most to least severe.
 func WriteText(w io.Writer, rep Report) {
 	fmt.Fprintf(w, "frameseven scan report\n")

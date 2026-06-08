@@ -394,7 +394,7 @@ func TestRunWritesReportsAndVerboseLogs(t *testing.T) {
 func assertReportFiles(t *testing.T, outputDir string) {
 	t.Helper()
 
-	for _, name := range []string{"report.html", "report.md", "report.json", "scan.log"} {
+	for _, name := range []string{"report.html", "report.md", "report.pdf", "report.json", "scan.log"} {
 		info, err := os.Stat(filepath.Join(outputDir, name))
 		if err != nil {
 			t.Errorf("%s was not created: %v", name, err)

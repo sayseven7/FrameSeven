@@ -148,5 +148,5 @@ Scanner tools return a summarized report containing:
 - summarized findings
 - tool errors
 
-Use the CLI report files when a full HTML, Markdown, or JSON scan report is
-needed.
+Use `frameseven_v1_report` with `format` set to `html`, `pdf`, or `all` when
+an MCP caller needs the full HTML report or a base64-encoded PDF report.
