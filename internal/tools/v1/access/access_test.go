@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -174,6 +175,200 @@ func TestRunNoIDORForNonNumeric(t *testing.T) {
 	for _, f := range Run(&cfg, srv.Client(), &surface) {
 		if f.CWE == "CWE-639" {
 			t.Errorf("did not expect IDOR finding for non-numeric parameter")
+		}
+	}
+}
+
+func TestPathIDORDetectsUserBoundObject(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Emulate /rest/basket/{id}: each numeric id returns a distinct
+		// object whose body carries an email (user-bound data).
+		if strings.HasPrefix(r.URL.Path, "/rest/basket/") {
+			id := strings.TrimPrefix(r.URL.Path, "/rest/basket/")
+			fmt.Fprintf(w, `{"basketId":%s,"owner":"user%s@juice-sh.op","items":["apple juice"]}`, id, id)
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+
+	surface := recon.Surface{
+		Endpoints: []string{srv.URL + "/rest/basket/6"},
+	}
+
+	var high bool
+	for _, f := range Run(&cfg, srv.Client(), &surface) {
+		if f.CWE == "CWE-639" && f.Severity == finding.High && strings.Contains(f.Title, "/rest/basket/{id}") {
+			high = true
+		}
+	}
+
+	if !high {
+		t.Errorf("expected a High path-IDOR finding for /rest/basket/{id}")
+	}
+}
+
+func TestPathIDORPublicContentIsInfo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// /rest/products/{id}: enumerable but public (no user-bound data).
+		if strings.HasPrefix(r.URL.Path, "/rest/products/") {
+			id := strings.TrimPrefix(r.URL.Path, "/rest/products/")
+			fmt.Fprintf(w, `{"productId":%s,"name":"Juice %s","price":1.99}`, id, id)
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+
+	surface := recon.Surface{
+		Endpoints: []string{srv.URL + "/rest/products/3"},
+	}
+
+	var info, high bool
+	for _, f := range Run(&cfg, srv.Client(), &surface) {
+		if f.CWE != "CWE-639" {
+			continue
+		}
+
+		if f.Severity == finding.High {
+			high = true
+		}
+
+		if f.Severity == finding.Info && strings.Contains(f.Title, "/rest/products/{id}") {
+			info = true
+		}
+	}
+
+	if high {
+		t.Errorf("public enumerable content must not be reported as High")
+	}
+
+	if !info {
+		t.Errorf("expected an informational enumerable path-reference finding")
+	}
+}
+
+func TestPathTemplate(t *testing.T) {
+	segments := strings.Split("/rest/basket/6", "/")
+	if got := pathTemplate(segments, 3); got != "/rest/basket/{id}" {
+		t.Errorf("pathTemplate = %q, want /rest/basket/{id}", got)
+	}
+}
+
+func TestPathIDOROwnedResourceWithoutEmailIsHigh(t *testing.T) {
+	// A basket is user-owned but its body carries no email/keyword. Returning a
+	// distinct 200 object for a neighbor id is a broken ownership check and must
+	// be High, not merely "enumerable".
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/rest/basket/") {
+			id := strings.TrimPrefix(r.URL.Path, "/rest/basket/")
+			fmt.Fprintf(w, `{"basketId":%s,"items":[{"productId":%s,"quantity":3}]}`, id, id)
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+
+	surface := recon.Surface{Endpoints: []string{srv.URL + "/rest/basket/6"}}
+
+	var high bool
+	for _, f := range Run(&cfg, srv.Client(), &surface) {
+		if f.CWE == "CWE-639" && f.Severity == finding.High && strings.Contains(f.Title, "/rest/basket/{id}") {
+			high = true
+		}
+	}
+
+	if !high {
+		t.Errorf("expected a High IDOR for an owned basket with no email in body")
+	}
+}
+
+func TestPathIDOROwnershipEnforcedIsNotFlagged(t *testing.T) {
+	// The server returns the caller's own basket (id 6) but 403 for any other id.
+	// Ownership is enforced, so there must be no IDOR finding.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rest/basket/6" {
+			fmt.Fprint(w, `{"basketId":6,"items":[]}`)
+			return
+		}
+
+		if strings.HasPrefix(r.URL.Path, "/rest/basket/") {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+
+	surface := recon.Surface{Endpoints: []string{srv.URL + "/rest/basket/6"}}
+
+	for _, f := range Run(&cfg, srv.Client(), &surface) {
+		if f.CWE == "CWE-639" {
+			t.Errorf("did not expect an IDOR finding when ownership is enforced (403), got %q", f.Title)
+		}
+	}
+}
+
+func TestCollectionIDORProbesOwnedItems(t *testing.T) {
+	// An owned collection (/api/Addresss) whose item ids are all reachable with
+	// 200 under the session, even though the SPA only ever calls the collection.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/Addresss/"):
+			id := strings.TrimPrefix(r.URL.Path, "/api/Addresss/")
+			fmt.Fprintf(w, `{"id":%s,"street":"%s Main St","zip":"1000%s"}`, id, id, id)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := config.New(srv.URL)
+	cfg.Timeout = 5 * time.Second
+
+	// Only the collection endpoint is in the surface; item ids are never captured.
+	surface := recon.Surface{Endpoints: []string{srv.URL + "/api/Addresss"}}
+
+	var high bool
+	for _, f := range Run(&cfg, srv.Client(), &surface) {
+		if f.CWE == "CWE-639" && f.Severity == finding.High && strings.Contains(f.Title, "/api/Addresss/{id}") {
+			high = true
+		}
+	}
+
+	if !high {
+		t.Errorf("expected a High IDOR from collection item probing on /api/Addresss")
+	}
+}
+
+func TestIsOwnedResource(t *testing.T) {
+	owned := []string{"basket", "Users", "Addresss", "Cards", "order_id", "account", "invoices"}
+	for _, name := range owned {
+		if !isOwnedResource(name) {
+			t.Errorf("expected %q to be an owned resource", name)
+		}
+	}
+
+	public := []string{"products", "ReadNews.aspx", "id", "search"}
+	for _, name := range public {
+		if isOwnedResource(name) {
+			t.Errorf("did not expect %q to be an owned resource", name)
 		}
 	}
 }

@@ -43,6 +43,21 @@ type Config struct {
 	// support dynamic input decide how to apply them.
 	CustomPayloads []string
 
+	// AuthCookies holds session cookies captured from a browser login.
+	// Format: ["name=value", "name=value"]. When non-empty, every tool
+	// injects these into the Cookie header of each request.
+	AuthCookies []string
+
+	// AuthHeaders holds extra headers captured from a browser login session,
+	// for example Authorization. When non-empty, every tool injects these
+	// into each request.
+	AuthHeaders map[string]string
+
+	// SeedEndpoints holds same-host API URLs captured from a browser session.
+	// recon merges them into the surface so scan tools test the real
+	// application routes that a static crawl of an SPA would miss.
+	SeedEndpoints []string
+
 	// Logger receives scan progress and diagnostic messages.
 	Logger *log.Logger
 

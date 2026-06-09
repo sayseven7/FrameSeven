@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sayseven7/frameseven/internal/config"
 	"github.com/sayseven7/frameseven/internal/finding"
 	"github.com/sayseven7/frameseven/internal/report"
 )
@@ -61,7 +62,7 @@ func TestV1ScanToolRequiresActiveScanAcceptance(t *testing.T) {
 }
 
 func TestBuildScanToolOutput(t *testing.T) {
-	output := buildScanToolOutput("recon", []string{"recon"}, reportFixture())
+	output := buildScanToolOutput("recon", []string{"recon"}, reportFixture(), false)
 
 	if output.RequestedTool != "recon" {
 		t.Errorf("requested_tool = %q", output.RequestedTool)
@@ -125,7 +126,7 @@ func TestNormalizeReportFormat(t *testing.T) {
 }
 
 func TestBuildReportToolOutput(t *testing.T) {
-	out, err := buildReportToolOutput([]string{"recon"}, reportFormatAll, reportFixture())
+	out, err := buildReportToolOutput([]string{"recon"}, reportFormatAll, reportFixture(), false)
 	if err != nil {
 		t.Fatalf("buildReportToolOutput: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestBuildReportToolOutput(t *testing.T) {
 }
 
 func TestBuildReportToolOutputTextOnly(t *testing.T) {
-	out, err := buildReportToolOutput([]string{"recon"}, reportFormatText, reportFixture())
+	out, err := buildReportToolOutput([]string{"recon"}, reportFormatText, reportFixture(), false)
 	if err != nil {
 		t.Fatalf("buildReportToolOutput: %v", err)
 	}
@@ -188,5 +189,56 @@ func reportFixture() report.Report {
 			},
 		},
 		StartedAt: time.Now(),
+	}
+}
+
+func TestApplyAuth(t *testing.T) {
+	cfg := config.New("https://target.example")
+
+	authenticated := applyAuth(&cfg,
+		[]string{"session=abc", "csrf=tok"},
+		map[string]string{"Authorization": "Bearer xyz"},
+		[]string{"https://target.example/rest/basket/6"},
+	)
+
+	if !authenticated {
+		t.Error("expected authenticated to be true when cookies/headers are supplied")
+	}
+
+	if len(cfg.AuthCookies) != 2 || cfg.AuthCookies[0] != "session=abc" {
+		t.Errorf("auth cookies = %v", cfg.AuthCookies)
+	}
+
+	if cfg.AuthHeaders["Authorization"] != "Bearer xyz" {
+		t.Errorf("auth headers = %v", cfg.AuthHeaders)
+	}
+
+	if len(cfg.SeedEndpoints) != 1 {
+		t.Errorf("seed endpoints = %v", cfg.SeedEndpoints)
+	}
+}
+
+func TestApplyAuthNoMaterialIsUnauthenticated(t *testing.T) {
+	cfg := config.New("https://target.example")
+
+	if applyAuth(&cfg, nil, nil, nil) {
+		t.Error("expected authenticated to be false when no session material is supplied")
+	}
+
+	if cfg.AuthCookies != nil || cfg.AuthHeaders != nil {
+		t.Error("expected no auth material to be set")
+	}
+}
+
+func TestApplyAuthSeedEndpointsOnly(t *testing.T) {
+	cfg := config.New("https://target.example")
+
+	// Seed endpoints alone do not make a scan authenticated.
+	if applyAuth(&cfg, nil, nil, []string{"https://target.example/api/Users/1"}) {
+		t.Error("seed endpoints alone must not count as authenticated")
+	}
+
+	if len(cfg.SeedEndpoints) != 1 {
+		t.Errorf("seed endpoints = %v", cfg.SeedEndpoints)
 	}
 }

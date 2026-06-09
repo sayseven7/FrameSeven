@@ -51,6 +51,8 @@ func Run(cfg *config.Config, client *http.Client, surface *recon.Surface) []find
 
 	findings = append(findings, unauthEndpoints(cfg, client, base)...)
 	findings = append(findings, idor(cfg, client, surface)...)
+	findings = append(findings, pathIDOR(cfg, client, surface)...)
+	findings = append(findings, collectionIDOR(cfg, client, surface)...)
 
 	return findings
 }
@@ -210,6 +212,8 @@ func probeIDOR(cfg *config.Config, client *http.Client, p recon.Param, value str
 		return finding.Finding{}, false
 	}
 
+	resource := resourceFromParam(p)
+
 	for _, delta := range []int{1, -1, 2} {
 		neighbor := id + delta
 		if neighbor < 0 {
@@ -217,65 +221,367 @@ func probeIDOR(cfg *config.Config, client *http.Client, p recon.Param, value str
 		}
 
 		resp := getParam(cfg, client, p, strconv.Itoa(neighbor))
-		if resp == nil || resp.status != http.StatusOK {
-			continue
-		}
 
-		// An adjacent identifier returning a distinct object of comparable size
-		// only proves the parameter is an *enumerable* object reference. Public
-		// content (news articles, products, blog posts) behaves identically and
-		// is not a vulnerability. A real IDOR requires the object to expose data
-		// belonging to another user/account, so we only raise a High-severity
-		// finding when the body carries user- or account-bound data; otherwise
-		// it is reported as informational for manual review.
-		if resp.body == base.body || !comparableSize(base.body, resp.body) {
+		severity, marker, ok := classifyNeighbor(resource, base, resp)
+		if !ok {
 			continue
 		}
 
 		extracted := p.Name + "=" + value + " -> " + p.Name + "=" + strconv.Itoa(neighbor)
+		title := idorTitle(severity, "parameter '"+p.Name+"'")
 
-		if marker, ok := sensitiveMarker(resp.body); ok {
-			return finding.Finding{
-				Title:       "Possible IDOR in parameter '" + p.Name + "'",
-				Module:      "access",
-				Severity:    finding.High,
-				OWASP:       "A01:2025 - Broken Access Control",
-				CWE:         "CWE-639",
-				CVSS:        7.1,
-				Description: "Changing the identifier returns another object whose body contains user- or account-bound data (" + marker + "), suggesting access to records owned by other users without an ownership check.",
-				Evidence: finding.Evidence{
-					Request:   resp.dump,
-					Response:  trim(resp.body, 400),
-					Extracted: extracted,
-				},
-				NextSteps: []string{
-					"Manually confirm the returned record belongs to a different user or account.",
-					"Enforce object-level authorization tied to the authenticated user.",
-					"Prefer unguessable identifiers and verify ownership on every access.",
-				},
-			}, true
-		}
-
-		return finding.Finding{
-			Title:       "Enumerable object reference in parameter '" + p.Name + "'",
-			Module:      "access",
-			Severity:    finding.Info,
-			OWASP:       "A01:2025 - Broken Access Control",
-			CWE:         "CWE-639",
-			Description: "Adjacent identifier values return distinct HTTP 200 objects, so the parameter is enumerable. This is not on its own an IDOR: public content (articles, products, news) behaves the same way. It is only a vulnerability if the objects expose data restricted to other users or accounts.",
-			Evidence: finding.Evidence{
-				Request:   resp.dump,
-				Response:  trim(resp.body, 400),
-				Extracted: extracted,
-			},
-			NextSteps: []string{
-				"Manually verify whether the returned objects contain data owned by other users/accounts (e.g. profiles, orders, messages).",
-				"If the data is private, enforce object-level authorization and prefer unguessable identifiers.",
-			},
-		}, true
+		return buildIDOR(severity, title, extracted, marker, resp), true
 	}
 
 	return finding.Finding{}, false
+}
+
+// maxPathIDORTemplates bounds how many distinct path templates are probed so a
+// large captured surface cannot blow up the access tool's runtime.
+const maxPathIDORTemplates = 50
+
+// pathIDOR tests broken object-level authorization on REST routes whose object
+// identifier sits in a numeric path segment, for example /rest/basket/6 or
+// /api/Users/1. These are the common SPA/API IDOR shapes that the query-string
+// IDOR check cannot reach. Requests run with the captured session, so a
+// successful read of another object proves a missing ownership check.
+func pathIDOR(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
+	var findings []finding.Finding
+	tested := map[string]bool{}
+
+	for _, endpoint := range surface.Endpoints {
+		u, err := url.Parse(endpoint)
+		if err != nil {
+			continue
+		}
+
+		segments := strings.Split(u.Path, "/")
+		for i, segment := range segments {
+			if !idRe.MatchString(segment) {
+				continue
+			}
+
+			template := u.Host + "|" + pathTemplate(segments, i)
+			if tested[template] {
+				continue
+			}
+
+			if len(tested) >= maxPathIDORTemplates {
+				return findings
+			}
+
+			tested[template] = true
+
+			if f, ok := probePathIDOR(cfg, client, u, segments, i); ok {
+				findings = append(findings, f)
+			}
+		}
+	}
+
+	return findings
+}
+
+func probePathIDOR(cfg *config.Config, client *http.Client, u *url.URL, segments []string, idx int) (finding.Finding, bool) {
+	value := segments[idx]
+
+	id, err := strconv.Atoi(value)
+	if err != nil {
+		return finding.Finding{}, false
+	}
+
+	base := get(cfg, client, withSegment(u, segments, idx, value))
+	if base == nil || base.status != http.StatusOK {
+		return finding.Finding{}, false
+	}
+
+	template := pathTemplate(segments, idx)
+	resource := precedingSegment(segments, idx)
+
+	for _, delta := range []int{1, -1, 2} {
+		neighbor := id + delta
+		if neighbor < 0 {
+			continue
+		}
+
+		resp := get(cfg, client, withSegment(u, segments, idx, strconv.Itoa(neighbor)))
+
+		severity, marker, ok := classifyNeighbor(resource, base, resp)
+		if !ok {
+			continue
+		}
+
+		extracted := template + ": " + value + " -> " + strconv.Itoa(neighbor)
+		title := idorTitle(severity, "path '"+template+"'")
+
+		return buildIDOR(severity, title, extracted, marker, resp), true
+	}
+
+	return finding.Finding{}, false
+}
+
+// pathTemplate renders the path with the segment at idx replaced by {id}, used
+// to deduplicate probes and to label findings, e.g. /rest/basket/{id}.
+func pathTemplate(segments []string, idx int) string {
+	replaced := make([]string, len(segments))
+	copy(replaced, segments)
+	replaced[idx] = "{id}"
+
+	return strings.Join(replaced, "/")
+}
+
+// withSegment returns the URL string with the path segment at idx set to value.
+func withSegment(u *url.URL, segments []string, idx int, value string) string {
+	replaced := make([]string, len(segments))
+	copy(replaced, segments)
+	replaced[idx] = value
+
+	clone := *u
+	clone.Path = strings.Join(replaced, "/")
+
+	return clone.String()
+}
+
+// ownerRoots are substrings that mark a resource as user- or account-owned.
+// When a candidate reference targets one of these, an adjacent identifier that
+// returns another 200 object (instead of 403/404) is a missing ownership check,
+// not merely an enumerable public reference.
+var ownerRoots = []string{
+	"user", "account", "customer",
+	"basket", "cart", "order", "invoice", "receipt",
+	"card", "wallet", "payment", "transaction",
+	"address", "profile", "contact", "phone", "email",
+	"message", "ticket", "document", "report",
+	"booking", "reservation", "subscription", "passport",
+}
+
+// isOwnedResource reports whether name references a user-owned object type.
+func isOwnedResource(name string) bool {
+	lower := strings.ToLower(name)
+	for _, root := range ownerRoots {
+		if strings.Contains(lower, root) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// looksStructured reports whether a body is a JSON object or array, the usual
+// shape of an API resource. It separates a real object from an SPA's HTML
+// fallback that many apps return with 200 for unknown identifiers.
+func looksStructured(body string) bool {
+	trimmed := strings.TrimSpace(body)
+	if trimmed == "" {
+		return false
+	}
+
+	return trimmed[0] == '{' || trimmed[0] == '['
+}
+
+// classifyNeighbor decides whether a neighbor object reference is a real IDOR
+// (High), an enumerable-but-public reference (Info), or nothing. The decision
+// follows ownership semantics rather than blind id enumeration: a user-owned
+// resource that returns a distinct 200 object under the authenticated session is
+// a broken ownership check, regardless of whether the body happens to contain an
+// email. A neighbor that returns 403/404 (ownership enforced) yields nothing.
+func classifyNeighbor(resource string, base, neighbor *response) (finding.Severity, string, bool) {
+	if neighbor == nil || neighbor.status != http.StatusOK {
+		return "", "", false
+	}
+
+	if base != nil && neighbor.body == base.body {
+		return "", "", false
+	}
+
+	structured := looksStructured(neighbor.body)
+	sized := base != nil && comparableSize(base.body, neighbor.body)
+
+	// Guard against the app's generic 200 fallback: require either a structured
+	// object or a distinct response of comparable size to the baseline.
+	if !structured && !sized {
+		return "", "", false
+	}
+
+	marker, sensitive := sensitiveMarker(neighbor.body)
+
+	if isOwnedResource(resource) {
+		if marker == "" {
+			marker = strings.TrimSpace(resource) + " object owned by another user"
+		}
+
+		return finding.High, marker, true
+	}
+
+	if sensitive {
+		return finding.High, marker, true
+	}
+
+	return finding.Info, "", true
+}
+
+// buildIDOR assembles an access-control finding for a confirmed object reference.
+func buildIDOR(severity finding.Severity, title, extracted, marker string, resp *response) finding.Finding {
+	f := finding.Finding{
+		Title:    title,
+		Module:   "access",
+		Severity: severity,
+		OWASP:    "A01:2025 - Broken Access Control",
+		CWE:      "CWE-639",
+		Evidence: finding.Evidence{
+			Request:   resp.dump,
+			Response:  trim(resp.body, 400),
+			Extracted: extracted,
+		},
+	}
+
+	if severity == finding.High {
+		f.CVSS = 7.1
+		f.Description = "Under the authenticated session, changing the object identifier returned another object (" + marker + ") with HTTP 200 instead of 403/404, so the server is not enforcing object-level ownership."
+		f.NextSteps = []string{
+			"Confirm the returned record belongs to a different user or account.",
+			"Enforce object-level authorization tied to the authenticated user on every request.",
+			"Prefer unguessable identifiers and verify ownership server-side.",
+		}
+
+		return f
+	}
+
+	f.Description = "Adjacent identifier values return distinct HTTP 200 objects, so the reference is enumerable. On its own this is not an IDOR: public content (products, articles) behaves the same way. It is a vulnerability only if the objects expose data restricted to other users or accounts."
+	f.NextSteps = []string{
+		"Manually verify whether the returned objects contain data owned by other users/accounts (e.g. baskets, orders, profiles).",
+		"If the data is private, enforce object-level authorization and prefer unguessable identifiers.",
+	}
+
+	return f
+}
+
+// idorTitle builds a finding title from the severity and the reference subject.
+func idorTitle(severity finding.Severity, subject string) string {
+	if severity == finding.High {
+		return "Possible IDOR in " + subject
+	}
+
+	return "Enumerable object reference in " + subject
+}
+
+// resourceFromParam derives a resource label for ownership analysis from a
+// parameter name and its endpoint path.
+func resourceFromParam(p recon.Param) string {
+	resource := p.Name
+	if u, err := url.Parse(p.Endpoint); err == nil {
+		resource += " " + lastPathSegment(u.Path)
+	}
+
+	return resource
+}
+
+// precedingSegment returns the path segment just before idx, the resource that
+// owns the identifier (e.g. "basket" in /rest/basket/6).
+func precedingSegment(segments []string, idx int) string {
+	for i := idx - 1; i >= 0; i-- {
+		if segments[i] != "" {
+			return segments[i]
+		}
+	}
+
+	return ""
+}
+
+// lastPathSegment returns the final non-empty segment of a path.
+func lastPathSegment(path string) string {
+	segments := strings.Split(path, "/")
+	for i := len(segments) - 1; i >= 0; i-- {
+		if segments[i] != "" {
+			return segments[i]
+		}
+	}
+
+	return ""
+}
+
+// hasNumericSegment reports whether any path segment is purely numeric.
+func hasNumericSegment(path string) bool {
+	for _, segment := range strings.Split(path, "/") {
+		if idRe.MatchString(segment) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// collectionIDOR probes user-owned collection endpoints (e.g. /api/Addresss,
+// /api/Cards) by requesting sequential item identifiers. When several ids return
+// distinct 200 objects under the authenticated session, the server is not
+// scoping the collection to the current user. This reaches item endpoints that
+// an SPA never calls directly, which passive capture alone would miss.
+func collectionIDOR(cfg *config.Config, client *http.Client, surface *recon.Surface) []finding.Finding {
+	var findings []finding.Finding
+	tested := map[string]bool{}
+
+	for _, endpoint := range surface.Endpoints {
+		u, err := url.Parse(endpoint)
+		if err != nil || hasNumericSegment(u.Path) {
+			continue
+		}
+
+		resource := lastPathSegment(u.Path)
+		if !isOwnedResource(resource) {
+			continue
+		}
+
+		key := u.Host + "|" + u.Path
+		if tested[key] {
+			continue
+		}
+
+		if len(tested) >= maxPathIDORTemplates {
+			break
+		}
+
+		tested[key] = true
+
+		if f, ok := probeCollectionItems(cfg, client, u, resource); ok {
+			findings = append(findings, f)
+		}
+	}
+
+	return findings
+}
+
+func probeCollectionItems(cfg *config.Config, client *http.Client, u *url.URL, resource string) (finding.Finding, bool) {
+	basePath := strings.TrimRight(u.Path, "/")
+
+	var objects []*response
+	for _, id := range []string{"1", "2", "3"} {
+		clone := *u
+		clone.Path = basePath + "/" + id
+
+		resp := get(cfg, client, clone.String())
+		if resp == nil || resp.status != http.StatusOK || !looksStructured(resp.body) {
+			continue
+		}
+
+		objects = append(objects, resp)
+	}
+
+	// Two or more sequential ids returning distinct structured objects under our
+	// session means the collection is not scoped to the authenticated user.
+	if len(objects) < 2 || objects[0].body == objects[len(objects)-1].body {
+		return finding.Finding{}, false
+	}
+
+	other := objects[len(objects)-1]
+
+	marker, _ := sensitiveMarker(other.body)
+	if marker == "" {
+		marker = resource + " objects belonging to other users"
+	}
+
+	template := basePath + "/{id}"
+	extracted := basePath + "/1 .. /3 -> distinct " + resource + " objects (HTTP 200)"
+
+	return buildIDOR(finding.High, idorTitle(finding.High, "path '"+template+"'"), extracted, marker, other), true
 }
 
 // sensitiveMarker reports whether a response body carries data that looks

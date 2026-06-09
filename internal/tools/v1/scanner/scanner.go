@@ -352,10 +352,12 @@ func newClient(cfg *config.Config, recorder *requestErrorRecorder) *http.Client 
 	return &http.Client{
 		Timeout: cfg.Timeout,
 		Transport: &recordingTransport{
-			base:     transport,
-			recorder: recorder,
-			logger:   cfg.Logger,
-			verbose:  cfg.Verbose,
+			base:        transport,
+			recorder:    recorder,
+			logger:      cfg.Logger,
+			verbose:     cfg.Verbose,
+			authCookies: cfg.AuthCookies,
+			authHeaders: cfg.AuthHeaders,
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) == 0 || sameOrigin(via[0].URL, req.URL) {
@@ -371,13 +373,17 @@ func newClient(cfg *config.Config, recorder *requestErrorRecorder) *http.Client 
 }
 
 type recordingTransport struct {
-	base     http.RoundTripper
-	recorder *requestErrorRecorder
-	logger   *log.Logger
-	verbose  bool
+	base        http.RoundTripper
+	recorder    *requestErrorRecorder
+	logger      *log.Logger
+	verbose     bool
+	authCookies []string
+	authHeaders map[string]string
 }
 
 func (t *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.injectSession(req)
+
 	started := time.Now()
 	if t.verbose {
 		t.logger.Printf("DEBUG HTTP request %s %s", req.Method, req.URL.Redacted())
@@ -410,6 +416,28 @@ func (t *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error
 	}
 
 	return resp, nil
+}
+
+// injectSession adds browser-captured auth material to an outgoing request. The
+// captured cookies are appended to any existing Cookie header, and each captured
+// header is set only when the request does not already define it.
+func (t *recordingTransport) injectSession(req *http.Request) {
+	if len(t.authCookies) > 0 {
+		captured := strings.Join(t.authCookies, "; ")
+
+		existing := req.Header.Get("Cookie")
+		if existing != "" {
+			req.Header.Set("Cookie", existing+"; "+captured)
+		} else {
+			req.Header.Set("Cookie", captured)
+		}
+	}
+
+	for name, value := range t.authHeaders {
+		if req.Header.Get(name) == "" {
+			req.Header.Set(name, value)
+		}
+	}
 }
 
 func startTool(logger *log.Logger, name, activity string) time.Time {

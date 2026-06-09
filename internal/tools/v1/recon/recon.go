@@ -95,6 +95,7 @@ func Run(cfg *config.Config, client *http.Client, surface *Surface) []finding.Fi
 
 	surface.Technologies = fingerprint(resp.Header, body)
 	surface.Endpoints, surface.Params = discover(base, body)
+	mergeSeedEndpoints(base, cfg.SeedEndpoints, surface)
 
 	if len(surface.Technologies) > 0 {
 		findings = append(findings, technologyFinding(surface.Technologies, dump))
@@ -289,6 +290,53 @@ func discover(base *url.URL, body string) ([]string, []Param) {
 	}
 
 	return mapKeys(endpoints), paramValues(params)
+}
+
+// mergeSeedEndpoints adds same-host endpoints captured from a browser session
+// into the surface, together with any query parameters they carry. An SPA loads
+// its API routes via JavaScript, so they never appear in the static homepage
+// HTML that discover parses; seeding them lets every scan tool reach them.
+func mergeSeedEndpoints(base *url.URL, seeds []string, surface *Surface) {
+	if len(seeds) == 0 {
+		return
+	}
+
+	seenEndpoint := map[string]bool{}
+	for _, endpoint := range surface.Endpoints {
+		seenEndpoint[endpoint] = true
+	}
+
+	seenParam := map[string]bool{}
+	for _, p := range surface.Params {
+		if u, err := url.Parse(p.Endpoint); err == nil {
+			seenParam[p.Name+"|"+u.Path] = true
+		}
+	}
+
+	for _, raw := range seeds {
+		ref, err := url.Parse(raw)
+		if err != nil || ref.Hostname() != base.Hostname() {
+			continue
+		}
+
+		ref.Fragment = ""
+		endpoint := ref.String()
+
+		if !seenEndpoint[endpoint] {
+			seenEndpoint[endpoint] = true
+			surface.Endpoints = append(surface.Endpoints, endpoint)
+		}
+
+		for name := range ref.Query() {
+			key := name + "|" + ref.Path
+			if seenParam[key] {
+				continue
+			}
+
+			seenParam[key] = true
+			surface.Params = append(surface.Params, Param{Name: name, Endpoint: endpoint, Method: http.MethodGet})
+		}
+	}
 }
 
 func probeSensitiveFiles(cfg *config.Config, client *http.Client, base *url.URL, surface *Surface) []finding.Finding {

@@ -3,6 +3,8 @@ package recon
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,5 +86,47 @@ func TestProbeSensitiveFiles(t *testing.T) {
 
 	if !found["/robots.txt"] {
 		t.Errorf("expected /robots.txt to be reported")
+	}
+}
+
+func TestMergeSeedEndpoints(t *testing.T) {
+	base, _ := url.Parse("https://target.example")
+
+	surface := &Surface{
+		Endpoints: []string{"https://target.example/home"},
+	}
+
+	seeds := []string{
+		"https://target.example/rest/basket/6",             // same host, new
+		"https://target.example/home",                      // duplicate, ignored
+		"https://target.example/rest/track-order/abc?id=9", // carries a query param
+		"https://other.example/api/leak",                   // different host, dropped
+		"://bad",                                           // unparseable, skipped
+	}
+
+	mergeSeedEndpoints(base, seeds, surface)
+
+	want := map[string]bool{
+		"https://target.example/rest/basket/6":             true,
+		"https://target.example/rest/track-order/abc?id=9": true,
+	}
+	for _, e := range surface.Endpoints {
+		delete(want, e)
+		if strings.Contains(e, "other.example") {
+			t.Errorf("cross-host endpoint leaked into surface: %s", e)
+		}
+	}
+	if len(want) != 0 {
+		t.Errorf("missing seeded endpoints: %v (got %v)", want, surface.Endpoints)
+	}
+
+	var foundParam bool
+	for _, p := range surface.Params {
+		if p.Name == "id" {
+			foundParam = true
+		}
+	}
+	if !foundParam {
+		t.Errorf("expected query param 'id' from seed endpoint, got %v", surface.Params)
 	}
 }

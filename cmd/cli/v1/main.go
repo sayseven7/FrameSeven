@@ -17,6 +17,7 @@ import (
 
 	"github.com/sayseven7/frameseven/internal/config"
 	"github.com/sayseven7/frameseven/internal/report"
+	"github.com/sayseven7/frameseven/internal/tools/v1/auth"
 	"github.com/sayseven7/frameseven/internal/tools/v1/scanner"
 )
 
@@ -53,6 +54,7 @@ type options struct {
 	verbose     bool
 	version     bool
 	listTools   bool
+	authBrowser bool
 	tools       []string
 }
 
@@ -114,6 +116,18 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, terminal bool
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)
 		return 2
+	}
+
+	if opts.authBrowser {
+		session, err := auth.Capture(cfg.Target)
+		if err != nil {
+			fmt.Fprintf(stderr, "error: browser auth failed: %v\n", err)
+			return 1
+		}
+
+		cfg.AuthCookies = session.Cookies
+		cfg.AuthHeaders = session.Headers
+		cfg.SeedEndpoints = session.Endpoints
 	}
 
 	logFile, err := openLogFile(opts.outputDir)
@@ -188,6 +202,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.BoolVar(&opts.verbose, "v", false, "show HTTP request and response debug logs")
 	flags.BoolVar(&opts.version, "version", false, "show the installed version")
 	flags.BoolVar(&opts.listTools, "list-tools", false, "list scanner tools")
+	flags.BoolVar(&opts.authBrowser, "auth-browser", false, "open a browser to log in before the scan")
 
 	var toolList string
 	flags.StringVar(&toolList, "tools", "", "comma-separated scanner tools to run, default, or all")
@@ -238,6 +253,11 @@ func runWizard(input io.Reader, output io.Writer, opts options) (options, bool) 
 	opts.userAgent = promptUserAgent(reader, output, opts.userAgent)
 	opts.outputDir = prompt(reader, output, "Output directory", opts.outputDir)
 	opts.tools = promptTools(reader, output, opts.tools)
+
+	authAnswer := prompt(reader, output, "Use browser-based authentication? [y/N]", "")
+	if strings.EqualFold(authAnswer, "y") || strings.EqualFold(authAnswer, "yes") {
+		opts.authBrowser = true
+	}
 
 	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Scan configuration")

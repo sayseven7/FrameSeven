@@ -106,8 +106,8 @@ func TestRunWizardUsesDefaults(t *testing.T) {
 		"",
 		outputDir,
 		"",
-		"yes",
 		"",
+		"yes",
 	}, "\n")
 
 	code := run([]string{"--interactive"}, strings.NewReader(input), &stdout, &stderr, true, func(cfg *config.Config) report.Report {

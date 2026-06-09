@@ -54,6 +54,10 @@ type scanToolInput struct {
 	ActiveScanAccepted bool     `json:"active_scan_accepted" jsonschema:"must be true to confirm this tool may send active security probes to the target"`
 	ExtraTools         []string `json:"extra_tools" jsonschema:"optional additional Framework v1 tools to run with this tool"`
 	CustomPayloads     []string `json:"custom_payloads" jsonschema:"optional caller-supplied probes used by tools that support dynamic payloads"`
+
+	AuthCookies   []string          `json:"auth_cookies" jsonschema:"optional session cookies as name=value pairs; sent in the Cookie header of every request so the scan runs authenticated"`
+	AuthHeaders   map[string]string `json:"auth_headers" jsonschema:"optional auth headers such as Authorization; sent on every request so the scan runs authenticated"`
+	SeedEndpoints []string          `json:"seed_endpoints" jsonschema:"optional same-host API URLs known to the caller; merged into the scan surface so access and IDOR checks reach SPA/API routes a static crawl would miss"`
 }
 
 type scanToolOutput struct {
@@ -62,6 +66,7 @@ type scanToolOutput struct {
 	RequestedTool string             `json:"requested_tool" jsonschema:"MCP tool requested by the caller"`
 	SelectedTools []string           `json:"selected_tools" jsonschema:"normalized scanner tools that were executed"`
 	Duration      string             `json:"duration" jsonschema:"scan duration"`
+	Authenticated bool               `json:"authenticated" jsonschema:"whether the scan ran with caller-supplied session cookies or headers"`
 	FindingsCount int                `json:"findings_count" jsonschema:"number of findings returned"`
 	ErrorsCount   int                `json:"errors_count" jsonschema:"number of tool errors recorded"`
 	Findings      []findingSummary   `json:"findings" jsonschema:"summarized findings"`
@@ -97,6 +102,10 @@ type reportToolInput struct {
 	ActiveScanAccepted bool     `json:"active_scan_accepted" jsonschema:"must be true to confirm this tool may send active security probes to the target"`
 	CustomPayloads     []string `json:"custom_payloads" jsonschema:"optional caller-supplied probes used by tools that support dynamic payloads"`
 	Format             string   `json:"format" jsonschema:"report format: text, markdown, html, pdf, both, or all; defaults to text"`
+
+	AuthCookies   []string          `json:"auth_cookies" jsonschema:"optional session cookies as name=value pairs; sent in the Cookie header of every request so the scan runs authenticated"`
+	AuthHeaders   map[string]string `json:"auth_headers" jsonschema:"optional auth headers such as Authorization; sent on every request so the scan runs authenticated"`
+	SeedEndpoints []string          `json:"seed_endpoints" jsonschema:"optional same-host API URLs known to the caller; merged into the scan surface so access and IDOR checks reach SPA/API routes a static crawl would miss"`
 }
 
 type reportToolOutput struct {
@@ -104,6 +113,7 @@ type reportToolOutput struct {
 	Target         string   `json:"target" jsonschema:"scanned target"`
 	SelectedTools  []string `json:"selected_tools" jsonschema:"normalized scanner tools that were executed"`
 	Duration       string   `json:"duration" jsonschema:"scan duration"`
+	Authenticated  bool     `json:"authenticated" jsonschema:"whether the scan ran with caller-supplied session cookies or headers"`
 	Status         string   `json:"status" jsonschema:"complete when no tool errors were recorded, otherwise incomplete"`
 	FindingsCount  int      `json:"findings_count" jsonschema:"number of findings in the report"`
 	ErrorsCount    int      `json:"errors_count" jsonschema:"number of tool errors recorded"`
@@ -162,6 +172,7 @@ func V1ScanTool(toolName string) func(context.Context, *mcpsdk.CallToolRequest, 
 
 		cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.ToolTimeoutSeconds, input.Concurrency, input.RateRequests, input.UserAgent, input.NVDAPIKey)
 		cfg.CustomPayloads = input.CustomPayloads
+		authenticated := applyAuth(&cfg, input.AuthCookies, input.AuthHeaders, input.SeedEndpoints)
 
 		if err := cfg.Validate(); err != nil {
 			return nil, scanToolOutput{}, err
@@ -169,17 +180,18 @@ func V1ScanTool(toolName string) func(context.Context, *mcpsdk.CallToolRequest, 
 
 		rep := scanner.Scan(&cfg)
 
-		return nil, buildScanToolOutput(toolName, selected, rep), nil
+		return nil, buildScanToolOutput(toolName, selected, rep, authenticated), nil
 	}
 }
 
-func buildScanToolOutput(toolName string, selected []string, rep report.Report) scanToolOutput {
+func buildScanToolOutput(toolName string, selected []string, rep report.Report, authenticated bool) scanToolOutput {
 	return scanToolOutput{
 		Version:       rep.SchemaVersion,
 		Target:        rep.Target,
 		RequestedTool: toolName,
 		SelectedTools: selected,
 		Duration:      rep.Duration,
+		Authenticated: authenticated,
 		FindingsCount: len(rep.Findings),
 		ErrorsCount:   len(rep.Errors),
 		Findings:      summarizeFindings(rep.Findings),
@@ -206,6 +218,7 @@ func V1Report(ctx context.Context, req *mcpsdk.CallToolRequest, input reportTool
 
 	cfg := buildScanConfig(input.Target, selected, input.TimeoutSeconds, input.ToolTimeoutSeconds, input.Concurrency, input.RateRequests, input.UserAgent, input.NVDAPIKey)
 	cfg.CustomPayloads = input.CustomPayloads
+	authenticated := applyAuth(&cfg, input.AuthCookies, input.AuthHeaders, input.SeedEndpoints)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, reportToolOutput{}, err
@@ -213,7 +226,7 @@ func V1Report(ctx context.Context, req *mcpsdk.CallToolRequest, input reportTool
 
 	rep := scanner.Scan(&cfg)
 
-	out, err := buildReportToolOutput(selected, format, rep)
+	out, err := buildReportToolOutput(selected, format, rep, authenticated)
 	if err != nil {
 		return nil, reportToolOutput{}, err
 	}
@@ -221,12 +234,13 @@ func V1Report(ctx context.Context, req *mcpsdk.CallToolRequest, input reportTool
 	return nil, out, nil
 }
 
-func buildReportToolOutput(selected []string, format string, rep report.Report) (reportToolOutput, error) {
+func buildReportToolOutput(selected []string, format string, rep report.Report, authenticated bool) (reportToolOutput, error) {
 	out := reportToolOutput{
 		Version:       rep.SchemaVersion,
 		Target:        rep.Target,
 		SelectedTools: selected,
 		Duration:      rep.Duration,
+		Authenticated: authenticated,
 		Status:        reportStatus(rep),
 		FindingsCount: len(rep.Findings),
 		ErrorsCount:   len(rep.Errors),
@@ -337,6 +351,30 @@ func buildScanConfig(target string, selected []string, timeoutSeconds, toolTimeo
 	cfg.NVDAPIKey = nvdAPIKey
 
 	return cfg
+}
+
+// applyAuth injects caller-supplied session material into the scan config so the
+// scan runs authenticated. The agent performs the login itself and passes the
+// resulting cookies, headers, and known endpoints; nothing is captured here.
+// It reports whether any authenticated material was applied.
+func applyAuth(cfg *config.Config, cookies []string, headers map[string]string, seedEndpoints []string) bool {
+	authenticated := false
+
+	if len(cookies) > 0 {
+		cfg.AuthCookies = cookies
+		authenticated = true
+	}
+
+	if len(headers) > 0 {
+		cfg.AuthHeaders = headers
+		authenticated = true
+	}
+
+	if len(seedEndpoints) > 0 {
+		cfg.SeedEndpoints = seedEndpoints
+	}
+
+	return authenticated
 }
 
 func summarizeFindings(findings []finding.Finding) []findingSummary {
