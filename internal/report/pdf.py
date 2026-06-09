@@ -174,24 +174,28 @@ class SecurityReportPDF(FPDF):
 
     def metric_cards(self, cards):
         width = (self.w - 32 - 18) / 4
+        height = 27
+        top = self.get_y()
         x = 16.0
 
         for label, value in cards:
             self.set_fill_color(248, 250, 252)
             self.set_draw_color(*LINE)
-            self.rect(x, self.get_y(), width, 27, style="DF")
+            self.rect(x, top, width, height, style="DF")
 
-            self.set_xy(x + 3, self.get_y() + 4)
+            self.set_xy(x + 3, top + 4)
             self.set_font("Helvetica", "B", 6.5)
             self.set_text_color(*MUTED)
             self.cell(width - 6, 4, clean(label), new_x="LMARGIN", new_y="NEXT")
 
-            self.set_xy(x + 3, self.get_y() + 2)
+            self.set_xy(x + 3, top + 10)
             self.set_font("Helvetica", "B", 12 if len(value) < 10 else 8)
             self.set_text_color(*INDIGO_DARK)
             self.multi_cell(width - 6, 5, clean(value))
 
             x += width + 6
+
+        self.set_y(top + height)
 
     def heading(self, text):
         self.ln(3)
