@@ -146,19 +146,21 @@ scanner tools run in parallel after `recon`.
 
 Slow full scans can still hit the MCP client's tool-call timeout
 (`operation timed out`). Raise the client timeout when the whole scan needs more
-time. In Claude Code, set it in `settings.json` `env` (applied on restart):
+time. In Claude Code, set the timeouts in the `env` object in `settings.json`:
 
 ```json
 {
   "env": {
-    "MCP_TOOL_TIMEOUT": "600000",
-    "MCP_TIMEOUT": "120000"
+    "MCP_TOOL_TIMEOUT": "300000",
+    "MCP_TIMEOUT": "600000"
   }
 }
 ```
 
-`MCP_TOOL_TIMEOUT` bounds each tool call; `MCP_TIMEOUT` bounds server startup
-(both in milliseconds).
+`MCP_TOOL_TIMEOUT` allows 5 minutes for each tool call. `MCP_TIMEOUT` allows 10
+minutes for server startup. Both values are expressed in milliseconds. See the
+[MCP client configuration guide](mcp-config.md) for complete provider-specific
+examples.
 
 ## Output
 

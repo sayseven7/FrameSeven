@@ -45,9 +45,10 @@ logs.
 
 ## Configuration by Provider
 
-### opencode
+### OpenCode
 
-Add to `opencode.json`:
+Add to `opencode.json`. The `timeout` value allows up to 10 minutes to connect
+and fetch the server tools:
 
 ```json
 {
@@ -56,47 +57,70 @@ Add to `opencode.json`:
     "frameseven": {
       "type": "remote",
       "url": "http://127.0.0.1:8080/mcp",
-      "enabled": true
+      "enabled": true,
+      "timeout": 600000
     }
   }
 }
 ```
+
+OpenCode does not currently document a separate timeout for individual MCP tool
+calls.
 
 ### Claude Code
 
-Add to `~/.claude/settings.json` (global) or `./.claude/settings.json`
-(project):
+Run this command from the project directory:
+
+```bash
+claude mcp add --transport http frameseven --scope project \
+  http://127.0.0.1:8080/mcp
+```
+
+This creates or updates the project-level `.mcp.json`. The equivalent
+configuration is:
 
 ```json
 {
   "mcpServers": {
     "frameseven": {
-      "type": "url",
+      "type": "http",
       "url": "http://127.0.0.1:8080/mcp"
     }
   }
 }
 ```
 
-### Codex
-
-Add to `~/.codex/settings.json` (global) or `./.codex/settings.json`
-(project):
+Set a 5-minute timeout for each tool call and a 10-minute MCP startup timeout in
+`~/.claude/settings.json` (global) or `./.claude/settings.json` (project):
 
 ```json
 {
-  "mcpServers": {
-    "frameseven": {
-      "type": "url",
-      "url": "http://127.0.0.1:8080/mcp"
-    }
+  "env": {
+    "MCP_TOOL_TIMEOUT": "300000",
+    "MCP_TIMEOUT": "600000"
   }
 }
+```
+
+Both values are expressed in milliseconds. Restart Claude Code after changing
+`settings.json`.
+
+### Codex
+
+Add to `~/.codex/config.toml` (global) or `./.codex/config.toml` (project in a
+trusted workspace):
+
+```toml
+[mcp_servers.frameseven]
+url = "http://127.0.0.1:8080/mcp"
+tool_timeout_sec = 300
+startup_timeout_sec = 600
 ```
 
 ### VS Code (GitHub Copilot)
 
-Add to `.vscode/mcp.json` (workspace) or `~/.vscode/mcp.json` (global):
+Add to `.vscode/mcp.json` for the workspace. For user-level configuration, run
+`MCP: Open User Configuration` from the Command Palette:
 
 ```json
 {
@@ -108,3 +132,13 @@ Add to `.vscode/mcp.json` (workspace) or `~/.vscode/mcp.json` (global):
   }
 }
 ```
+
+VS Code does not currently document per-server MCP timeout fields in
+`mcp.json`.
+
+## Provider Documentation
+
+- [OpenCode MCP servers](https://opencode.ai/docs/mcp-servers/)
+- [Claude Code MCP](https://code.claude.com/docs/en/mcp)
+- [Codex MCP](https://developers.openai.com/codex/mcp)
+- [VS Code MCP servers](https://code.visualstudio.com/docs/agent-customization/mcp-servers)
